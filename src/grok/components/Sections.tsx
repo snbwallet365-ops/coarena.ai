@@ -7,6 +7,7 @@ import { testKey } from "../lib/providers";
 import BotAvatar from "./BotAvatar";
 import { LargeTitle, Group, Row, Toggle, Sheet, Field, inputCls, Pill, Segmented } from "./ui";
 import { LiveScreen } from "./ComputerPanel";
+import SetupStatus from "./SetupStatus";
 import { cn } from "../utils/cn";
 
 const ago = (t: number) => { const s = (Date.now() - t) / 1000; if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return new Date(t).toLocaleDateString(); };
@@ -196,6 +197,7 @@ export function ConnectionsView() {
     <div className="h-full overflow-y-auto pb-10">
       <LargeTitle title="Connections" sub="Keys are stored only on this device and sent directly to each provider." />
       <div className="px-4 md:px-7">
+        <SetupStatus onFix={() => document.getElementById("ai-keys")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
         <div className="mb-7 flex items-center gap-4 rounded-[20px] bg-surface p-4 shadow-[0_1px_2px_rgba(0,0,0,.04)]">
           <span className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-[#25d366] text-white"><MessageCircle size={26} fill="white" /></span>
           <div className="min-w-0 flex-1">
@@ -205,6 +207,7 @@ export function ConnectionsView() {
           {wa.connected ? <Pill color="#34c759" onClick={() => setWaOpen(true)}>Manage</Pill> : <button onClick={() => setWaOpen(true)} className="press rounded-full bg-[#25d366] px-4 py-2 text-[14px] font-semibold text-white">Connect</button>}
         </div>
 
+        <div id="ai-keys" />
         <Group header="AI providers · real-time API keys">
           {(Object.keys(PROVIDERS) as Provider[]).map((p) => <KeyRow key={p} p={p} />)}
         </Group>
