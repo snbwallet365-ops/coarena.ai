@@ -66,8 +66,8 @@ const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(
 export { uid };
 
 const DEFAULT_BOTS: Bot[] = [
-  { id: "grok", name: "Grok", title: "Chief of Staff", shape: "circle", color: "#1c1c1e", provider: "xai", model: "grok-4", main: true,
-    system: "You are Grok, the user's Chief of Staff bot at N Space. You coordinate other specialist bots, plan work, research, and get things done. Be proactive, smart and practical.",
+  { id: "grok", name: "nSpace", title: "Chief of Staff Agent", shape: "circle", color: "#1c1c1e", provider: "xai", model: "grok-4", main: true,
+    system: "You are nSpace, the user's Chief of Staff agent at nSpace Visa Agency. You coordinate other specialist bots, plan work, research, and get things done. Be proactive, smart and practical.",
     knowledge: "grok", tools: ["search", "browse", "remember", "pdf", "whatsapp", "ask_bot"], status: "idle", preview: "Ready to coordinate your team", updatedAt: Date.now() },
   { id: "browser", name: "Browser Agent", title: "Browser use · Playwright", shape: "squircle", color: "#007aff", provider: "openai", model: "gpt-4o-mini",
     system: "You are a browser-use agent. You navigate websites, read pages and complete web tasks step by step.",
@@ -119,7 +119,7 @@ const DEFAULT_SETTINGS: Settings = {
   whatsapp: { phone: "", token: "", phoneNumberId: "", connected: false },
   server: { url: "http://localhost:8787", useProxy: false },
   approvals: true, notifications: false, maxSteps: 6, temperature: 0.7, userName: "You",
-  theme: "light", language: "bn", adaptive: true,
+  theme: "light", language: "en", adaptive: true,
 };
 
 const initial = () => ({
@@ -171,7 +171,7 @@ export const useStore = create<State>()(
     }),
     {
       name: "grokbot-v2",
-      version: 3,
+      version: 4,
       partialize: (s) => ({ bots: s.bots.map((b) => ({ ...b, status: b.status === "working" ? "idle" : b.status })), threads: s.threads, docs: s.docs, routines: s.routines, sessions: s.sessions, flows: s.flows, settings: s.settings }) as any,
       merge: (persisted: any, current) => {
         const p = persisted ?? {};
@@ -183,7 +183,7 @@ export const useStore = create<State>()(
           settings: { ...DEFAULT_SETTINGS, ...(p.settings ?? {}), keys: { ...DEFAULT_SETTINGS.keys, ...(p.settings?.keys ?? {}) }, whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(p.settings?.whatsapp ?? {}) }, server: { ...DEFAULT_SETTINGS.server, ...(p.settings?.server ?? {}) } },
         };
       },
-      migrate: (s: any) => s,
+      migrate: (s: any, v: number) => { if (s && v < 4) { if (s.settings) s.settings.language = "en"; if (Array.isArray(s.bots)) s.bots = s.bots.map((b: any) => b.id === "grok" && b.name === "Grok" ? { ...b, name: "nSpace", title: "Chief of Staff Agent" } : b); } return s; },
     },
   ),
 );

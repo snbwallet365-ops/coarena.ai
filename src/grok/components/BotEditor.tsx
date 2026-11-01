@@ -7,7 +7,7 @@ import { cn } from "../utils/cn";
 
 const SHAPES: Shape[] = ["circle", "squircle", "triangle", "hex", "diamond", "blob", "pill", "star"];
 const COLORS = ["#1c1c1e", "#007aff", "#34c759", "#ff9500", "#ff3b30", "#5856d6", "#af52de", "#ff2d55", "#00c7be", "#fa520f", "#4d6bfe", "#a2845e"];
-const KNOW = [["", "None"], ["grok", "Grok Bot harness"], ["visa", "Visa & refusals"], ["legal", "Legal drafting"], ["pdf", "PDF documents"], ["base44", "App builder (Base44)"], ["browser", "Browser-use"]] as const;
+const KNOW = [["", "None"], ["grok", "nSpace Agent harness"], ["visa", "Visa & refusals"], ["legal", "Legal drafting"], ["pdf", "PDF documents"], ["base44", "App builder (Base44)"], ["browser", "Browser-use"]] as const;
 const TEMPLATES: Partial<Bot>[] = [
   { name: "Inbox Manager", title: "Email triage", shape: "squircle", color: "#00c7be", system: "You triage email, draft replies and summarise threads.", tools: ["search", "remember", "whatsapp"] },
   { name: "Visa Rejection Analyst", title: "Refusal → approval plan", shape: "star", color: "#ff9500", provider: "gemini", model: "gemini-2.5-pro", knowledge: "visa", system: "You analyse visa refusal letters line by line and build approval-focused reapplication or appeal strategies.", tools: ["search", "browse", "pdf", "remember"] },
@@ -37,7 +37,7 @@ export default function BotEditor({ botId, open, onClose, onCreated }: { botId: 
   const prov = (d.provider ?? "openai") as Provider;
 
   return (
-    <Sheet open={open} onClose={onClose} title={existing ? "Edit Bot" : "New Bot"} size="lg"
+    <Sheet open={open} onClose={onClose} title={existing ? "Edit Agent" : "New Agent"} size="lg"
       right={<button disabled={!d.name?.trim()} onClick={save} className="text-[17px] font-semibold text-[#007aff] disabled:text-label3">{existing ? "Done" : "Create"}</button>}>
       <div className="px-4 pb-10 md:px-6">
         <div className="flex flex-col items-center pt-2 pb-5">
@@ -69,7 +69,7 @@ export default function BotEditor({ botId, open, onClose, onCreated }: { botId: 
 
         <Group>
           <Field label="Name"><input value={d.name ?? ""} onChange={(e) => up({ name: e.target.value })} placeholder="e.g. Visa Expert" className={inputCls} /></Field>
-          <Field label="Job"><input value={d.title ?? ""} onChange={(e) => up({ title: e.target.value })} placeholder="What does this Bot own?" className={inputCls} /></Field>
+          <Field label="Job"><input value={d.title ?? ""} onChange={(e) => up({ title: e.target.value })} placeholder="What does this Agent own?" className={inputCls} /></Field>
         </Group>
 
         <Group header="AI Provider" footer={prov === "mistral" ? "Optional: paste a Mistral Agent ID (ag_…) to use the Agents API with your pre-configured agent, model & tools." : undefined}>
@@ -110,9 +110,9 @@ export default function BotEditor({ botId, open, onClose, onCreated }: { botId: 
 
         {existing && (
           <Group>
-            <Row title="Set as main Bot" right={<Toggle on={!!d.main} onChange={(v) => up({ main: v })} />} />
+            <Row title="Set as main Agent" right={<Toggle on={!!d.main} onChange={(v) => up({ main: v })} />} />
             <Row title="Clear conversation" onClick={() => { if (confirm("Clear all messages?")) { clearThread(existing.id); onClose(); } }} danger />
-            <Row title="Delete Bot" onClick={() => { if (confirm(`Delete ${existing.name}?`)) { removeBot(existing.id); onClose(); } }} danger />
+            <Row title="Delete Agent" onClick={() => { if (confirm(`Delete ${existing.name}?`)) { removeBot(existing.id); onClose(); } }} danger />
           </Group>
         )}
       </div>

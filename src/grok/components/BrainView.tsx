@@ -108,7 +108,7 @@ export default function BrainView() {
 
   return (
     <div className="h-full overflow-y-auto pb-10">
-      <LargeTitle title="Brain" sub="Long-term memory shared by all Bots — relevant memories are recalled automatically."
+      <LargeTitle title="Brain" sub="Long-term memory shared by all Agents — relevant memories are recalled automatically."
         right={<div className="mb-1.5 flex gap-1">
           <button onClick={() => fileRef.current?.click()} title="Import" className="press flex h-9 w-9 items-center justify-center rounded-full text-[#007aff] hover:bg-fill"><Upload size={20} /></button>
           <button onClick={() => setEdit({ title: "", content: "" })} title="Add memory" className="press flex h-9 w-9 items-center justify-center rounded-full text-[#007aff] hover:bg-fill"><Plus size={24} /></button>
@@ -136,7 +136,7 @@ export default function BrainView() {
             <div className="mt-2.5 text-[12px] text-label3">{d.source} · {new Date(d.createdAt).toLocaleDateString()} · {Math.ceil(d.content.length / 5)} words</div>
           </button>
         ))}
-        {list.length === 0 && <div className="col-span-full py-10 text-center text-[15px] text-label2">No memories yet. Bots save facts here with the “remember” tool.</div>}
+        {list.length === 0 && <div className="col-span-full py-10 text-center text-[15px] text-label2">No memories yet. Agents save facts here with the “remember” tool.</div>}
       </div>
 
       <Sheet open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? "Memory" : "New memory"} size="lg"
@@ -144,9 +144,9 @@ export default function BrainView() {
         <div className="px-4 pb-8 md:px-7">
           <Group>
             <Field label="Title"><input value={edit?.title ?? ""} onChange={(e) => setEdit({ ...edit, title: e.target.value })} placeholder="e.g. My passport details" className={inputCls} /></Field>
-            <Row title="Always remember" subtitle="Pinned memories are given to every Bot on every message" right={<Toggle on={!!edit?.pinned} onChange={(v) => setEdit({ ...edit, pinned: v })} />} />
+            <Row title="Always remember" subtitle="Pinned memories are given to every Agent on every message" right={<Toggle on={!!edit?.pinned} onChange={(v) => setEdit({ ...edit, pinned: v })} />} />
           </Group>
-          <Group header="Content" footer="Markdown supported. Bots retrieve memories that match the conversation.">
+          <Group header="Content" footer="Markdown supported. Agents retrieve memories that match the conversation.">
             <textarea value={edit?.content ?? ""} onChange={(e) => setEdit({ ...edit, content: e.target.value })} rows={14} className="block w-full resize-y bg-transparent px-4 py-3 font-mono text-[13.5px] leading-relaxed outline-none" placeholder="Facts, preferences, documents…" />
           </Group>
           {edit?.id && (

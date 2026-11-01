@@ -31,7 +31,7 @@ export default function App() {
 
   const [section, setSection] = useState<Section>(() => {
     const s = new URLSearchParams(location.search).get("section") as Section | null;
-    return s && (s === "bots" || NAV.some((n) => n.id === s)) ? s : "bots";
+    return s && (s === "agents" || NAV.some((n) => n.id === s)) ? s : "agents";
   });
   const [activeId, setActiveId] = useState<string | null>(() => useStore.getState().bots[0]?.id ?? null);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("ns-collapsed") === "1");
@@ -89,9 +89,9 @@ export default function App() {
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   }, []);
 
-  const selectBot = (id: string) => { setActiveId(id); setSection("bots"); };
+  const selectBot = (id: string) => { setActiveId(id); setSection("agents"); };
   const openKeys = () => { setSection("connections"); setRT({ drawer: false }); };
-  const showRight = section === "bots" && !!activeId && rightOpen;
+  const showRight = section === "agents" && !!activeId && rightOpen;
 
   const sidebar = (mobile = false) => (
     <Sidebar section={section} setSection={setSection} activeId={activeId} onSelectBot={selectBot} onNewBot={() => setEditor({ open: true, id: null })}
@@ -126,7 +126,7 @@ export default function App() {
         </div>
       )}
 
-      <main key={section === "bots" ? "bots" : section} className="lg-card fade-in relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden md:rounded-[26px]">
+      <main key={section === "agents" ? "agents" : section} className="lg-card fade-in relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden md:rounded-[26px]">
         {content()}
       </main>
 

@@ -33,7 +33,7 @@ export function LiveScreen({ botId, interactive = false, fill = false }: { botId
 
   const last = sessions.find((s) => !botId || s.botId === botId);
   const cur = b && (!botId || b.botId === botId) ? b
-    : last ? { botId: last.botId, botName: bots.find((x) => x.id === last.botId)?.name ?? "Bot", url: last.url, title: last.title, screenshot: last.screenshot, label: "Last page visited", loading: false } : null;
+    : last ? { botId: last.botId, botName: bots.find((x) => x.id === last.botId)?.name ?? "Agent", url: last.url, title: last.title, screenshot: last.screenshot, label: "Last page visited", loading: false } : null;
   useEffect(() => { setAddr(cur?.url ?? ""); setImgOk(true); }, [cur?.url, cur?.screenshot]);
   const running = cur ? !!live[cur.botId] : false;
   let host = cur?.url ?? ""; try { host = new URL(host).hostname; } catch { /* */ }
@@ -66,7 +66,7 @@ export function LiveScreen({ botId, interactive = false, fill = false }: { botId
           <div className="relative flex h-full flex-col items-center justify-center text-white" style={{ background: wallpaper(dark) }}>
             <div className="text-[44px] font-light leading-none tracking-tight drop-shadow">{now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</div>
             <div className="mt-1 text-[13px] font-medium opacity-90 drop-shadow">{now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}</div>
-            <div className="lg-pill mt-4 rounded-full px-3 py-1 text-[12px] text-label">Computer idle — ask a Bot to browse</div>
+            <div className="lg-pill mt-4 rounded-full px-3 py-1 text-[12px] text-label">Computer idle — ask a Agent to browse</div>
             <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-2xl bg-white/25 px-2 py-1.5 backdrop-blur">
               {[Globe, Terminal, FolderOpen, FileText].map((I, i) => <span key={i} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/85 text-[#3c3c43]"><I size={14} /></span>)}
             </div>
