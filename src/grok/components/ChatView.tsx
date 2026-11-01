@@ -117,7 +117,7 @@ export default function ChatView({ botId, onEdit, onOpenKeys }: { botId: string;
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: hasKey ? "#34c759" : "#ff9500" }} />{bot.agentId ? "Mistral Agent" : bot.model}<ChevronDown size={12} />
           </button>
           <button onClick={() => { if (confirm(`Clear chat with ${bot.name}?`)) clearThread(botId); }} title="Clear chat" className="press flex h-9 w-9 items-center justify-center rounded-full text-label2 hover:bg-fill"><Trash2 size={17} /></button>
-          <button onClick={onEdit} title="Bot settings" className="press flex h-9 w-9 items-center justify-center rounded-full text-label2 hover:bg-fill"><SlidersHorizontal size={17} /></button>
+          <button onClick={onEdit} title="Agent settings" className="press flex h-9 w-9 items-center justify-center rounded-full text-label2 hover:bg-fill"><SlidersHorizontal size={17} /></button>
           <button onClick={() => setRT({ rightOpen: !rightOpen, rightTab: "computer" })} title="Computer"
             className={cn("press relative flex h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-all", rightOpen ? "bg-[#007aff] text-white shadow-[0_6px_18px_rgba(0,122,255,.35)]" : "lg-pill text-label")}>
             <Monitor size={16} /><span className="hidden sm:inline">Computer</span>

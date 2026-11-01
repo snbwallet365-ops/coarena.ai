@@ -5,7 +5,7 @@ import { useStore, useRuntime, PROVIDERS, type Bot } from "../lib/store";
 import BotAvatar from "./BotAvatar";
 import { cn } from "../utils/cn";
 
-export type Section = "bots" | "browser" | "brain" | "automations" | "routines" | "connections" | "settings";
+export type Section = "agents" | "browser" | "brain" | "automations" | "routines" | "connections" | "settings";
 export const NAV: { id: Section; label: string; icon: typeof Globe; color: string }[] = [
   { id: "browser", label: "Computer & Browser", icon: Globe, color: "#007aff" },
   { id: "brain", label: "Brain", icon: Brain, color: "#ff2d55" },
@@ -48,7 +48,7 @@ export default function Sidebar({ section, setSection, activeId, onSelectBot, on
 
   const BotRow = (b: Bot, i: number) => {
     const status = live[b.id] && b.status !== "waiting" ? "working" : b.status;
-    const active = section === "bots" && activeId === b.id;
+    const active = section === "agents" && activeId === b.id;
     return (
       <button key={b.id} title={b.name} onClick={() => { onSelectBot(b.id); if (mobile) close(); }} style={{ animationDelay: `${i * 22}ms` }}
         className={cn("fade-up press group relative flex w-full items-center gap-2.5 rounded-[14px] text-left transition-all duration-200", c ? "justify-center p-1.5" : "px-2 py-2",
@@ -79,7 +79,7 @@ export default function Sidebar({ section, setSection, activeId, onSelectBot, on
       {/* Brand */}
       <div className={cn("flex items-center gap-2.5 px-3 pt-3.5 pb-3", c && "flex-col")}>
         <Logo size={c ? 40 : 38} />
-        {!c && <div className="min-w-0 flex-1"><div className="truncate text-[17px] font-bold tracking-tight">N Space</div><div className="truncate text-[11.5px] text-label2">Grok Bot · AI teammates</div></div>}
+        {!c && <div className="min-w-0 flex-1"><div className="truncate text-[17px] font-bold tracking-tight">nSpace</div><div className="truncate text-[11.5px] text-label2">AI Agents · Visa workspace</div></div>}
         <button onClick={() => setSettings((s) => ({ ...s, theme: dark ? "light" : "dark" }))} title={dark ? "Light mode" : "Dark mode"}
           className="press lg-pill relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full">
           <Sun size={16} className={cn("absolute text-[#ff9f0a] transition-all duration-500", dark ? "translate-y-6 rotate-90 opacity-0" : "translate-y-0 opacity-100")} />
@@ -96,13 +96,13 @@ export default function Sidebar({ section, setSection, activeId, onSelectBot, on
 
       {/* New + search */}
       {c ? (
-        <div className="flex justify-center pb-2"><button onClick={onNewBot} title="New Bot" className="press flex h-10 w-10 items-center justify-center rounded-[13px] bg-[#007aff] text-white shadow-[0_6px_18px_rgba(0,122,255,.35)]"><Plus size={20} strokeWidth={2.5} /></button></div>
+        <div className="flex justify-center pb-2"><button onClick={onNewBot} title="New Agent" className="press flex h-10 w-10 items-center justify-center rounded-[13px] bg-[#007aff] text-white shadow-[0_6px_18px_rgba(0,122,255,.35)]"><Plus size={20} strokeWidth={2.5} /></button></div>
       ) : (
         <div className="flex items-center gap-2 px-3 pb-2">
           <div className="flex h-9 flex-1 items-center gap-1.5 rounded-[11px] bg-fill px-2.5 text-label2">
-            <Search size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Bots" className="w-full bg-transparent text-[15px] text-label outline-none placeholder:text-label2" />
+            <Search size={15} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Agents" className="w-full bg-transparent text-[15px] text-label outline-none placeholder:text-label2" />
           </div>
-          <button onClick={() => { onNewBot(); if (mobile) close(); }} title="New Bot" className="press flex h-9 w-9 items-center justify-center rounded-[11px] bg-[#007aff] text-white shadow-[0_6px_18px_rgba(0,122,255,.35)]"><Plus size={19} strokeWidth={2.5} /></button>
+          <button onClick={() => { onNewBot(); if (mobile) close(); }} title="New Agent" className="press flex h-9 w-9 items-center justify-center rounded-[11px] bg-[#007aff] text-white shadow-[0_6px_18px_rgba(0,122,255,.35)]"><Plus size={19} strokeWidth={2.5} /></button>
         </div>
       )}
 

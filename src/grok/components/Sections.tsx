@@ -50,7 +50,7 @@ export function BrowserView({ onOpenBot }: { onOpenBot: (id: string) => void }) 
 
   return (
     <div className="h-full overflow-y-auto pb-10">
-      <LargeTitle title="Computer & Browser" sub="Watch Bots browse in real time — click the screen to take control (local server)." />
+      <LargeTitle title="Computer & Browser" sub="Watch Agents browse in real time — click the screen to take control (local server)." />
       <div className="mx-4 mb-6 md:mx-7"><LiveScreen interactive /></div>
       <ServerCard />
 
@@ -83,7 +83,7 @@ export function BrowserView({ onOpenBot }: { onOpenBot: (id: string) => void }) 
         {sessions.map((s, i) => {
           const b = bots.find((x) => x.id === s.botId);
           return (
-            <button key={s.id} style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }} onClick={() => useRuntime.getState().set({ browser: { botId: s.botId, botName: b?.name ?? "Bot", url: s.url, title: s.title, screenshot: s.screenshot, label: s.title, loading: false }, browserMin: false, rightOpen: true, rightTab: "computer" })}
+            <button key={s.id} style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }} onClick={() => useRuntime.getState().set({ browser: { botId: s.botId, botName: b?.name ?? "Agent", url: s.url, title: s.title, screenshot: s.screenshot, label: s.title, loading: false }, browserMin: false, rightOpen: true, rightTab: "computer" })}
               className="fade-up press overflow-hidden rounded-[18px] bg-surface text-left shadow-[0_1px_2px_rgba(0,0,0,.04)] hover:shadow-md">
               <div className="aspect-[16/10] bg-fill2">{s.screenshot ? <img src={s.screenshot} loading="lazy" alt="" className="h-full w-full object-cover object-top" /> : <div className="flex h-full items-center justify-center text-label3"><Globe size={28} /></div>}</div>
               <div className="flex items-center gap-2 p-3">
@@ -94,7 +94,7 @@ export function BrowserView({ onOpenBot }: { onOpenBot: (id: string) => void }) 
             </button>
           );
         })}
-        {sessions.length === 0 && <div className="col-span-full rounded-[18px] bg-surface py-12 text-center text-[15px] text-label2">No pages yet — ask a Bot to browse something.</div>}
+        {sessions.length === 0 && <div className="col-span-full rounded-[18px] bg-surface py-12 text-center text-[15px] text-label2">No pages yet — ask a Agent to browse something.</div>}
       </div>
     </div>
   );
@@ -114,7 +114,7 @@ export function RoutinesView() {
   };
   return (
     <div className="h-full overflow-y-auto pb-10">
-      <LargeTitle title="Routines" sub="Bots wake up on a schedule and work without a prompt." right={<button onClick={() => setEdit({ botId: bots[0]?.id, everyMinutes: 1440, name: "", prompt: "" })} className="press mb-1.5 flex h-9 w-9 items-center justify-center rounded-full text-[#007aff] hover:bg-fill"><Plus size={24} /></button>} />
+      <LargeTitle title="Routines" sub="Agents wake up on a schedule and work without a prompt." right={<button onClick={() => setEdit({ botId: bots[0]?.id, everyMinutes: 1440, name: "", prompt: "" })} className="press mb-1.5 flex h-9 w-9 items-center justify-center rounded-full text-[#007aff] hover:bg-fill"><Plus size={24} /></button>} />
       <div className="px-4 md:px-7">
         <Group footer="Routines run while the app is open (desktop, PWA or the local server tab). You'll get a notification when they finish if enabled in Settings.">
           {routines.map((r) => {
@@ -139,10 +139,10 @@ export function RoutinesView() {
         <div className="px-4 pb-8">
           <Group>
             <Field label="Name"><input value={edit?.name ?? ""} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="Morning briefing" className={inputCls} /></Field>
-            <Field label="Bot"><select value={edit?.botId} onChange={(e) => setEdit({ ...edit, botId: e.target.value })} className="w-full bg-transparent text-[16px] text-[#007aff] outline-none">{bots.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>
+            <Field label="Agent"><select value={edit?.botId} onChange={(e) => setEdit({ ...edit, botId: e.target.value })} className="w-full bg-transparent text-[16px] text-[#007aff] outline-none">{bots.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>
             <Field label="Repeat"><select value={edit?.everyMinutes} onChange={(e) => setEdit({ ...edit, everyMinutes: Number(e.target.value) })} className="w-full bg-transparent text-[16px] text-[#007aff] outline-none">{INTERVALS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
           </Group>
-          <Group header="Instructions"><textarea value={edit?.prompt ?? ""} onChange={(e) => setEdit({ ...edit, prompt: e.target.value })} rows={5} placeholder="What should the Bot do each time?" className="block w-full resize-none bg-transparent px-4 py-3 text-[16px] outline-none" /></Group>
+          <Group header="Instructions"><textarea value={edit?.prompt ?? ""} onChange={(e) => setEdit({ ...edit, prompt: e.target.value })} rows={5} placeholder="What should the Agent do each time?" className="block w-full resize-none bg-transparent px-4 py-3 text-[16px] outline-none" /></Group>
           {edit?.id && <Group><Row title="Delete routine" danger onClick={() => { removeRoutine(edit.id!); setEdit(null); }} /></Group>}
         </div>
       </Sheet>
@@ -200,7 +200,7 @@ export function ConnectionsView() {
           <span className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-[#25d366] text-white"><MessageCircle size={26} fill="white" /></span>
           <div className="min-w-0 flex-1">
             <div className="text-[16px] font-semibold">WhatsApp</div>
-            <div className="truncate text-[13px] text-label2">{wa.connected ? `Connected · +${wa.phone}${wa.token ? " · Cloud API" : " · one-tap links"}` : "Get Bot results on WhatsApp in one tap"}</div>
+            <div className="truncate text-[13px] text-label2">{wa.connected ? `Connected · +${wa.phone}${wa.token ? " · Cloud API" : " · one-tap links"}` : "Get Agent results on WhatsApp in one tap"}</div>
           </div>
           {wa.connected ? <Pill color="#34c759" onClick={() => setWaOpen(true)}>Manage</Pill> : <button onClick={() => setWaOpen(true)} className="press rounded-full bg-[#25d366] px-4 py-2 text-[14px] font-semibold text-white">Connect</button>}
         </div>
@@ -223,12 +223,12 @@ export function ConnectionsView() {
           <div className="mb-5 flex flex-col items-center pt-2 text-center">
             <span className="flex h-16 w-16 items-center justify-center rounded-[18px] bg-[#25d366] text-white"><MessageCircle size={34} fill="white" /></span>
             <div className="mt-3 text-[20px] font-bold">Connect WhatsApp</div>
-            <div className="mt-1 max-w-xs text-[14px] text-label2">Bots send summaries, PDFs links and alerts straight to your chat.</div>
+            <div className="mt-1 max-w-xs text-[14px] text-label2">Agents send summaries, PDFs links and alerts straight to your chat.</div>
           </div>
           <Group header="Your number" footer="Include country code, e.g. 447700900123">
             <Field label="Phone"><input value={wa.phone} onChange={(e) => setWa({ phone: e.target.value.replace(/[^\d]/g, "") })} inputMode="tel" placeholder="Country code + number" className={inputCls} /></Field>
           </Group>
-          <button disabled={wa.phone.length < 8} onClick={() => { setWa({ connected: true }); window.open(`https://wa.me/${wa.phone}?text=${encodeURIComponent("✅ Grok Bot is connected to this WhatsApp.")}`, "_blank"); toast("WhatsApp connected"); }}
+          <button disabled={wa.phone.length < 8} onClick={() => { setWa({ connected: true }); window.open(`https://wa.me/${wa.phone}?text=${encodeURIComponent("✅ nSpace Agent is connected to this WhatsApp.")}`, "_blank"); toast("WhatsApp connected"); }}
             className="press mb-7 w-full rounded-[14px] bg-[#25d366] py-3.5 text-[17px] font-semibold text-white disabled:opacity-40">One-tap connect & send test</button>
           <Group header="Optional · WhatsApp Cloud API" footer="For fully automatic sending (no tap), add a Meta WhatsApp Cloud API token and Phone Number ID from developers.facebook.com.">
             <Field label="Token"><input type="password" value={wa.token} onChange={(e) => setWa({ token: e.target.value.trim() })} placeholder="EAAG…" className={inputCls} /></Field>
@@ -275,7 +275,7 @@ export function SettingsView() {
           <Field label="Your name"><input value={settings.userName} onChange={(e) => set({ userName: e.target.value })} className={inputCls} /></Field>
         </Group>
 
-        <Group header="Appearance & language" footer="Bots always reply in the selected language — the Brain remembers this permanently. Long questions get long, detailed answers.">
+        <Group header="Appearance & language" footer="Agents always reply in the selected language — the Brain remembers this permanently. Long questions get long, detailed answers.">
           <div className="px-4 py-3"><div className="mb-2 text-[15px]">Theme · ⌘J</div><Segmented value={settings.theme} onChange={(v) => set({ theme: v })} options={[{ value: "light", label: "☀️ Light" }, { value: "dark", label: "🌙 Dark" }]} /></div>
           <div className="px-4 py-3"><div className="mb-2 text-[15px]">Reply language</div><Segmented value={settings.language} onChange={(v) => set({ language: v })} options={[{ value: "bn", label: "বাংলা" }, { value: "en", label: "English" }, { value: "auto", label: "Auto" }]} /></div>
           <Row title="Smart answer length" subtitle="Short questions → short; long questions → long" right={<Toggle on={settings.adaptive} onChange={(v) => set({ adaptive: v })} />} />
@@ -288,7 +288,7 @@ export function SettingsView() {
 
         <Group header="Behaviour">
           <Row icon={<ShieldCheck size={17} />} iconBg="#34c759" title="Ask before actions" subtitle="Clicks, typing & WhatsApp sends" right={<Toggle on={settings.approvals} onChange={(v) => set({ approvals: v })} />} />
-          <Row icon={<Bell size={17} />} iconBg="#ff3b30" title="Notifications" subtitle="When a Bot finishes in background" right={<Toggle on={settings.notifications} onChange={async (v) => {
+          <Row icon={<Bell size={17} />} iconBg="#ff3b30" title="Notifications" subtitle="When a Agent finishes in background" right={<Toggle on={settings.notifications} onChange={async (v) => {
             if (v && typeof Notification !== "undefined") { const p = await Notification.requestPermission(); if (p !== "granted") { toast("Notifications blocked by browser"); return; } }
             set({ notifications: v });
           }} />} />
@@ -308,7 +308,7 @@ export function SettingsView() {
         <Group header="Data" footer="Backups never include API keys.">
           <Row icon={<Download size={17} />} iconBg="#007aff" title="Export backup" onClick={exportData} chevron />
           <Row icon={<Upload size={17} />} iconBg="#34c759" title="Import backup" onClick={importData} chevron />
-          <Row icon={<RotateCcw size={17} />} iconBg="#ff3b30" title="Reset everything" danger onClick={() => { if (confirm("Delete all bots, chats, memories and keys?")) { useStore.getState().resetAll(); toast("Reset complete"); } }} />
+          <Row icon={<RotateCcw size={17} />} iconBg="#ff3b30" title="Reset everything" danger onClick={() => { if (confirm("Delete all agents, chats, memories and keys?")) { useStore.getState().resetAll(); toast("Reset complete"); } }} />
         </Group>
 
         <div className="flex flex-col items-center gap-1 pb-6 text-[12px] text-label3">

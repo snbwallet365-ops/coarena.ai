@@ -53,7 +53,7 @@ export default function AutomationsView() {
 
   return (
     <div className="h-full overflow-y-auto pb-10">
-      <LargeTitle title="Automations" sub="Chain Bots into real-time flows — each step's output feeds the next."
+      <LargeTitle title="Automations" sub="Chain Agents into real-time flows — each step's output feeds the next."
         right={<button onClick={() => setEdit(blank())} className="press mb-1.5 flex h-9 items-center gap-1.5 rounded-full bg-[#007aff] px-3.5 text-[14px] font-semibold text-white shadow-[0_6px_18px_rgba(0,122,255,.35)]"><Plus size={17} strokeWidth={2.5} /> New flow</button>} />
 
       <div className="grid gap-4 px-4 md:px-7 xl:grid-cols-2">
@@ -129,7 +129,7 @@ export default function AutomationsView() {
                     <button onClick={() => move(i, 1)} className="text-label2"><ChevronDown size={18} /></button>
                     {edit.steps.length > 1 && <button onClick={() => setEdit({ ...edit, steps: edit.steps.filter((_, j) => j !== i) })} className="text-[#ff3b30]"><Trash2 size={16} /></button>}
                   </div>
-                  <textarea value={s.prompt} onChange={(e) => setStep(i, { prompt: e.target.value })} rows={3} placeholder={i === 0 ? "What should this Bot do?" : "What to do with the previous output? {{previous}}"} className="w-full resize-y rounded-[12px] bg-fill px-3 py-2 text-[15px] outline-none placeholder:text-label3" />
+                  <textarea value={s.prompt} onChange={(e) => setStep(i, { prompt: e.target.value })} rows={3} placeholder={i === 0 ? "What should this Agent do?" : "What to do with the previous output? {{previous}}"} className="w-full resize-y rounded-[12px] bg-fill px-3 py-2 text-[15px] outline-none placeholder:text-label3" />
                 </div>
               );
             })}
