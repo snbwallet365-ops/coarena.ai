@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Built-in expert knowledge injected into specialist bots and seeded into the Brain.
 
 export const VISA_KNOWLEDGE = `

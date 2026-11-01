@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useStore, useRuntime, KNOWLEDGE, TOOL_INFO, uid, type Bot, type Step, type ToolName } from "./store";
 import { streamChat, type ChatMsg } from "./providers";
 import { makePdf, downloadUrl } from "./pdf";

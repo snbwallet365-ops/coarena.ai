@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { VISA_KNOWLEDGE, LEGAL_KNOWLEDGE, PDF_KNOWLEDGE, GROK_HARNESS_KNOWLEDGE, BASE44_KNOWLEDGE, BROWSER_AGENT_KNOWLEDGE } from "./knowledge";

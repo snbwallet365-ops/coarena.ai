@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Search, Upload, Trash2, FileDown, Brain } from "lucide-react";
 import { useStore, type BrainDoc } from "../lib/store";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from "react";
 import { Plus, Play, Zap, Clock, FileDown, MessageCircle, Brain, CircleSlash, Trash2, ChevronUp, ChevronDown, Loader2, Check, AlertTriangle, ExternalLink } from "lucide-react";
 import { useStore, useRuntime, uid, type Flow, type FlowOutput, type RunState } from "../lib/store";

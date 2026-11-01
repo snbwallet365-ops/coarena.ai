@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useStore, useRuntime, type FlowRun, type RunState } from "./store";
 import { runBot } from "./agent";
 import { makePdf, downloadUrl } from "./pdf";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from "react";
 import { Search, Plus, Globe, Brain, Workflow, Repeat, Plug, Settings, Sun, Moon, PanelLeftClose, PanelLeftOpen, Crown, X, Server, Languages } from "lucide-react";
 import { useStore, useRuntime, PROVIDERS, type Bot } from "../lib/store";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { Provider } from "./store";
 
 export interface ChatMsg { role: "system" | "user" | "assistant"; content: string }

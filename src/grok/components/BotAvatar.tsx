@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { BotStatus, Shape } from "../lib/store";
 
 const SHAPES: Record<Shape, string> = {

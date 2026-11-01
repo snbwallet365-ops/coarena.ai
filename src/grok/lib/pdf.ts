@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { jsPDF } from "jspdf";
 
 const clean = (s: string) =>

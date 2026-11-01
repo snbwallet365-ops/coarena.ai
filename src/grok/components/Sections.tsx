@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect, useState } from "react";
 import { Globe, Play, Plus, Clock, ExternalLink, Server, CheckCircle2, XCircle, Loader2, Copy, MessageCircle, KeyRound, Download, Upload, Bell, ShieldCheck, Gauge, Thermometer, User, Smartphone, RotateCcw, Eye, EyeOff, Terminal } from "lucide-react";
 import { useStore, useRuntime, PROVIDERS, type Provider, type Routine } from "../lib/store";

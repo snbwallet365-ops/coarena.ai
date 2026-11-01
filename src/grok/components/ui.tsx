@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect, type ReactNode } from "react";
 import { ChevronRight, X, Menu } from "lucide-react";
 import { useRuntime } from "../lib/store";

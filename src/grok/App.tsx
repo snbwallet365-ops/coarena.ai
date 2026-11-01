@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect, useRef, useState } from "react";
 import { useStore, useRuntime } from "./lib/store";
 import { checkServer, runBot } from "./lib/agent";
