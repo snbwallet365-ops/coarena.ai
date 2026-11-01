@@ -9,13 +9,13 @@ import { Sheet, MenuButton } from "./ui";
 import { cn } from "../utils/cn";
 
 const SUGGEST_EN: Record<string, string[]> = {
-  grok: ["Plan my week and list the top 5 priorities", "Research the latest AI agent news and summarise with sources", "Ask the Visa Expert what documents a UK visitor visa needs", "Remember: I prefer short bullet-point answers"],
+  grok: ["Build a UK visitor visa document checklist for a Bangladeshi applicant", "My Schengen visa was refused — analyse the reasons and plan a reapplication", "Prepare me for a US B1/B2 embassy interview with 10 likely questions", "Create a Canada visitor visa cover letter as a PDF"],
   browser: ["Go to news.ycombinator.com and list the top 5 stories", "Search for the best rated laptop under $1000 in 2026", "Open github.com/trending and summarise the top repos", "Find the official Schengen visa fee today"],
   visa: ["My UK visit visa was refused under V4.2(a) and (c). What should I do?", "Analyse my US B1/B2 214(b) refusal and build a reapplication plan", "Schengen tourist visa checklist for a self-employed applicant", "Write a cover letter for a Canada visitor visa reapplication"],
   legal: ["Draft a mutual NDA between two companies", "Create a freelance service agreement with milestones", "Write a sponsorship invitation letter for a visitor visa", "Generate an affidavit of support template"],
   pdf: ["Create a professional CV PDF for a senior React developer", "Make an invoice PDF for 3 web design services", "Generate a 7-day Japan travel itinerary as PDF", "Produce a project proposal PDF for a mobile app"],
   base44: ["Build a habit tracker app with streaks", "Create a CRM for small business with contacts and deals", "Make an expense splitter app for trips", "Build a Kanban task board with drag and drop"],
-  default: ["What can you do for me?", "Search the web for today's top headlines", "Summarise a topic in 5 bullets", "Create a PDF report about renewable energy"],
+  default: ["What visa services can you help my agency with?", "Search the web for today's top headlines", "Summarise a topic in 5 bullets", "Create a PDF report about renewable energy"],
 };
 const SUGGEST_BN: Record<string, string[]> = {
   grok: ["আমার এই সপ্তাহের কাজের পরিকল্পনা করে শীর্ষ ৫টি অগ্রাধিকার দাও", "আজকের এআই এজেন্ট খবর খুঁজে সূত্রসহ সারাংশ দাও", "ভিসা এক্সপার্টকে জিজ্ঞেস করো UK ভিজিট ভিসায় কী কী কাগজ লাগে", "মনে রাখো: আমি সংক্ষিপ্ত বুলেট পয়েন্টে উত্তর পছন্দ করি"],
@@ -97,6 +97,19 @@ export default function ChatView({ botId, onEdit, onOpenKeys }: { botId: string;
 
   const S = lang === "bn" ? SUGGEST_BN : SUGGEST_EN;
   const sugg = S[bot.id] ?? S[bot.knowledge ?? ""] ?? S.default;
+  const lastMsg = thread[thread.length - 1];
+  const followUps = lastMsg && lastMsg.role === "assistant" && !busy && !lastMsg.error && lastMsg.content
+    ? (() => {
+        const t = lastMsg.content.toLowerCase();
+        const out: string[] = [];
+        if (/checklist|document/.test(t)) out.push("Turn this checklist into a PDF");
+        if (/refus|reject|214\(b\)|v4\.2/.test(t)) out.push("Write the reapplication cover letter");
+        if (/interview/.test(t)) out.push("Give me model answers for these questions");
+        if (/letter|draft/.test(t)) out.push("Make it more formal and export as PDF");
+        out.push("Summarise this in 5 bullet points", "What should I do next?");
+        return out.slice(0, 2);
+      })()
+    : [];
   const deviceW = { phone: 390, tablet: 820, desktop: "100%" }[device];
 
   return (
@@ -146,6 +159,15 @@ export default function ChatView({ botId, onEdit, onOpenKeys }: { botId: string;
           ) : (
             <div className="space-y-6">
               {thread.map((m) => <MessageItem key={m.id} m={m} bot={bot} live={liveId === m.id} onPreview={setPreview} onOpenKeys={onOpenKeys} onRetry={retry} onToast={showToast} />)}
+              {followUps.length > 0 && (
+                <div className="fade-up flex flex-wrap gap-2 pl-1">
+                  {followUps.map((f) => (
+                    <button key={f} onClick={() => send(f)} className="press lg-pill flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13.5px] font-medium hover:-translate-y-0.5">
+                      <Sparkles size={13} className="text-[#007aff]" />{f}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
