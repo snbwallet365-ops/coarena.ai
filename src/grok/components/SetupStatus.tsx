@@ -21,7 +21,7 @@ export default function SetupStatus({ onFix }: { onFix?: () => void }) {
         </div>
       </div>
 
-      <div className="divide-y divide-separator">
+      <div className="divide-y divide-fill2">
         {bots.map((b) => {
           const ok = !!keys[b.provider]?.trim();
           return (
