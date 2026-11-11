@@ -1,13 +1,5 @@
 {
   "version": "7",
   "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1794390524251,
-      "tag": "0000_applicant_portal",
-      "breakpoints": true
-    }
-  ]
+  "entries": []
 }
