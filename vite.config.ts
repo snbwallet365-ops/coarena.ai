@@ -24,12 +24,13 @@ export default defineConfig({
   },
   vite: {
     resolve: {
-      alias: {
-        // Pin entities to the hoisted v4.5.0 copy; a nested v7 breaks SSR.
-        "entities/lib/decode.js": path.resolve(__dirname, "node_modules/entities/lib/decode.js"),
-        "entities/lib/encode.js": path.resolve(__dirname, "node_modules/entities/lib/encode.js"),
-        entities: path.resolve(__dirname, "node_modules/entities"),
-      },
+      alias: [
+        // Pin entities to the hoisted v4.5.0 copy for old importers; exact matches only so
+        // htmlparser2's own nested v7 ("entities/decode") still resolves.
+        { find: /^entities\/lib\/decode\.js$/, replacement: path.resolve(__dirname, "node_modules/entities/lib/decode.js") },
+        { find: /^entities\/lib\/encode\.js$/, replacement: path.resolve(__dirname, "node_modules/entities/lib/encode.js") },
+        { find: /^entities$/, replacement: path.resolve(__dirname, "node_modules/entities") },
+      ],
     },
   },
 });
