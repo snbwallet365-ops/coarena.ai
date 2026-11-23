@@ -306,10 +306,14 @@ export async function runBot(botId: string, userText: string, opt: { routine?: s
       }[call.name];
       addStep({ id: sid, tool: call.name, label, note: call.before || undefined, status: "running" });
       let result = "";
+      // Legal terms, OTPs, captchas, payments and final submits ALWAYS pause for a human,
+      // even when "Ask before actions" is switched off in Settings.
+      const SENSITIVE = /\b(otp|one[\s-]?time|verification code|2fa|captcha|password|passcode|pin)\b|accept|agree|terms|consent|i have read|submit|final|confirm|pay|payment|checkout|purchase|\bsign\b(?! in)/i;
+      const sensitiveAct = (call.name === "click" || call.name === "type") && SENSITIVE.test(String(a.text ?? a.selector ?? ""));
       try {
-        if ((call.name === "click" || call.name === "type") && S().settings.approvals) {
-          setStep(sid, { status: "approval", detail: call.name === "type" ? `“${a.text}”` : undefined });
-          s.updateBot(botId, { status: "waiting", preview: `Needs approval: ${label}` });
+        if ((call.name === "click" || call.name === "type") && (S().settings.approvals || sensitiveAct)) {
+          setStep(sid, { status: "approval", detail: sensitiveAct ? `Sensitive step: ${call.name === "type" ? `“${String(a.text ?? "").slice(0, 40)}”` : `“${String(a.text ?? "").slice(0, 60)}”`}` : call.name === "type" ? `“${a.text}”` : undefined });
+          s.updateBot(botId, { status: "waiting", preview: sensitiveAct ? "Needs you: terms / OTP / submit" : `Needs approval: ${label}` });
           const ok = await requestApproval(sid);
           s.updateBot(botId, { status: "working", preview: "Working…" });
           if (!ok) { setStep(sid, { status: "denied" }); msgs.push({ role: "user", content: `TOOL_RESULT ${call.name}: The user DENIED this action. Do not retry it; continue or explain.` }); continue; }

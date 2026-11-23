@@ -69,10 +69,30 @@ export interface Settings {
   theme: "light" | "dark"; language: "bn" | "en" | "auto"; adaptive: boolean;
   /** Share anonymous thumbs up/down ratings with Coarena. */
   feedback: boolean;
+  /** Browser / Google Cloud API key (used by browser automations, PageSpeed checks, etc.). */
+  browserKey: string;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 export { uid };
+
+/** Role prompt for the permanent "Portal Verifier" agent (visa, portal verification, browser automation, PDF summary). */
+export const PORTAL_VERIFIER_PROMPT = `You are a practical Visa, Portal Verification, Browser Automation, and Document Summary Agent inside the Coarena workspace.
+
+## How you work
+1. VERIFY — check visa / portal information, document status or the browser task you were given. Verify every input before you act (country, visa type, application number, URL) and log each step in one short sentence before doing it.
+2. PAUSE — never proceed on your own when you reach: legal terms & conditions, OTP or any sensitive code, captcha, payment, or the final submit button of a form. Stop, say exactly what is needed, and wait for Human Take Over / approval. Never type an OTP or accept terms yourself.
+3. RESUME — once the user confirms, continue cleanly, extract the results, then produce:
+   • a short structured summary (status, what was verified, what is missing, next actions);
+   • a PDF report when one is useful (use the pdf tool);
+   • a delivery confirmation (what was sent where — WhatsApp, PDF download, Brain memory).
+
+## Rules
+- Keep answers clear, structured and accurate — headings, numbered steps, tables where useful.
+- Never invent an unverified status. If something could not be confirmed, say so explicitly.
+- Never expose secrets: do not repeat API keys, OTPs, passwords or full ID numbers in chat or documents.
+- If a page fails to load, retry once, then fall back to search or ask the user.
+- Reply in the user's language; keep legal/visa codes, URLs and document names in their original form.`;
 
 const DEFAULT_BOTS: Bot[] = [
   { id: "coarena", name: "Coarena", title: "Chief of Staff Agent", shape: "circle", color: "#1c1c1e", provider: "coarena", model: COARENA_DEFAULT_MODEL, main: true,
@@ -96,6 +116,9 @@ const DEFAULT_BOTS: Bot[] = [
   { id: "researcher", name: "Researcher", title: "Deep research & citations", shape: "blob", color: "#4d6bfe", provider: "coarena", model: COARENA_DEFAULT_MODEL,
     system: "You are a meticulous research analyst. Search, read sources and produce cited, structured answers.",
     tools: ["search", "browse", "pdf", "remember"], status: "idle", preview: "Deep research with sources", updatedAt: Date.now() - 6000 },
+  { id: "portal", name: "Portal Verifier", title: "Visa, portal verification & PDF summary", shape: "squircle", color: "#af52de", provider: "coarena", model: COARENA_DEFAULT_MODEL, knowledge: "visa",
+    system: PORTAL_VERIFIER_PROMPT,
+    tools: ["search", "browse", "click", "type", "remember", "pdf", "whatsapp"], status: "idle", preview: "Verify a visa portal or case status", updatedAt: Date.now() - 6500 },
 ];
 
 const SEED_DOCS: BrainDoc[] = [
@@ -124,6 +147,7 @@ interface State {
 
 const DEFAULT_SETTINGS: Settings = {
   keys: { coarena: "", xai: "", openai: "", deepseek: "", mistral: "", gemini: "" },
+  browserKey: "",
   whatsapp: { phone: "", token: "", phoneNumberId: "", connected: false },
   server: { url: "http://localhost:8787", useProxy: false },
   approvals: true, notifications: false, maxSteps: 6, temperature: 0.7, userName: "You",
@@ -182,7 +206,7 @@ export const useStore = create<State>()(
     {
       // Storage key kept from the previous release so existing chats & memories survive the rebrand.
       name: "grokbot-v2",
-      version: 5,
+      version: 6,
       partialize: (s) => ({ bots: s.bots.map((b) => ({ ...b, status: b.status === "working" ? "idle" : b.status })), threads: s.threads, docs: s.docs, routines: s.routines, sessions: s.sessions, flows: s.flows, settings: s.settings }) as any,
       merge: (persisted: any, current) => {
         const p = persisted ?? {};
@@ -193,13 +217,17 @@ export const useStore = create<State>()(
           ...current, ...p,
           flows: p.flows ?? current.flows,
           docs: docs.some((d) => d.id === "k-lang") ? docs : [SEED_DOCS[0], ...docs],
-          settings: { ...DEFAULT_SETTINGS, ...(p.settings ?? {}), keys, whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(p.settings?.whatsapp ?? {}) }, server: { ...DEFAULT_SETTINGS.server, ...(p.settings?.server ?? {}) } },
+          settings: { ...DEFAULT_SETTINGS, ...(p.settings ?? {}), keys, browserKey: p.settings?.browserKey ?? "", whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(p.settings?.whatsapp ?? {}) }, server: { ...DEFAULT_SETTINGS.server, ...(p.settings?.server ?? {}) } },
         };
       },
       migrate: (s: any, v: number) => {
         if (s && v < 4) {
           if (s.settings) s.settings.language = "en";
           if (Array.isArray(s.bots)) s.bots = s.bots.map((b: any) => b.id === "grok" && b.name === "Grok" ? { ...b, name: "Coarena", title: "Chief of Staff Agent" } : b);
+        }
+        // v6: ship the permanent Portal Verifier agent to existing workspaces.
+        if (s && v < 6 && Array.isArray(s.bots) && !s.bots.some((b: any) => b.id === "portal")) {
+          s.bots = [...s.bots, DEFAULT_BOTS.find((b) => b.id === "portal")];
         }
         // v5: Coarena becomes the single default provider for every existing agent.
         if (s && v < 5) {

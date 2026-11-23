@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useStore, useRuntime, PROVIDERS, TOOL_INFO, type Bot, type Provider, type Shape, type ToolName } from "../lib/store";
 import { COARENA_DEFAULT_MODEL } from "../lib/coarena";
+import { PORTAL_VERIFIER_PROMPT } from "../lib/store";
 import BotAvatar from "./BotAvatar";
 import { Globe } from "lucide-react";
 import { Sheet, Group, Row, Toggle, Field, inputCls } from "./ui";
@@ -24,6 +25,7 @@ const BROWSER_AGENT: Partial<Bot> = {
 
 const TEMPLATES: Partial<Bot>[] = [
   BROWSER_AGENT,
+  { name: "Portal Verifier", title: "Visa, portal verification & PDF summary", shape: "squircle", color: "#af52de", knowledge: "visa", system: PORTAL_VERIFIER_PROMPT, tools: ["search", "browse", "click", "type", "remember", "pdf", "whatsapp"] },
   { name: "Inbox Manager", title: "Email triage", shape: "squircle", color: "#00c7be", system: "You triage email, draft replies and summarise threads.", tools: ["search", "remember", "whatsapp"] },
   { name: "Visa Rejection Analyst", title: "Refusal → approval plan", shape: "star", color: "#ff9500", provider: "coarena", model: COARENA_DEFAULT_MODEL, knowledge: "visa", system: "You analyse visa refusal letters line by line and build approval-focused reapplication or appeal strategies.", tools: ["search", "browse", "pdf", "remember"] },
   { name: "Contract Reviewer", title: "Risk & clause review", shape: "hex", color: "#5856d6", knowledge: "legal", system: "You review contracts, flag risky clauses, and suggest redlines.", tools: ["pdf", "search"] },

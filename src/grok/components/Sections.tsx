@@ -332,6 +332,80 @@ function CoarenaCard() {
   );
 }
 
+
+// ---------------- Browser / Google Cloud API key ----------------
+function BrowserKeyCard() {
+  const key = useStore((s) => s.settings.browserKey);
+  const setSettings = useStore((s) => s.setSettings);
+  const toast = useRuntime((s) => s.showToast);
+  const [show, setShow] = useState(false);
+  const [state, setState] = useState<"idle" | "testing" | "ok" | "fail">("idle");
+  const [msg, setMsg] = useState("");
+
+  const test = async () => {
+    setState("testing"); setMsg("");
+    try {
+      const r = await fetch(
+        `https://pagespeedonline.googleapis.com/v1/progress.txt?url=${encodeURIComponent("https://example.com")}&key=${encodeURIComponent(key)}`,
+      );
+      if (!r.ok) {
+        const t = await r.text().catch(() => "");
+        let m = t;
+        try { const j = JSON.parse(t); m = j?.error?.message || j?.error?.status || t; } catch { /* keep text */ }
+        throw new Error(String(m).slice(0, 140) || `Google ${r.status}`);
+      }
+      setState("ok"); setMsg("Connected · key accepted by Google APIs");
+      toast("Browser / Google Cloud key is valid");
+    } catch (e: any) {
+      setState("fail");
+      const raw = String(e?.message ?? e);
+      setMsg(raw === "Failed to fetch" ? "Blocked by the browser — check the key or your network" : raw.slice(0, 140));
+    }
+  };
+
+  const status = key ? (state === "fail" ? "Error" : "Connected") : "Missing";
+  const tone = status === "Connected" ? "#34c759" : status === "Error" ? "#ff3b30" : "#ff9500";
+
+  return (
+    <div className="mb-7 rounded-[20px] bg-surface p-4 shadow-[0_1px_2px_rgba(0,0,0,.04)]">
+      <div className="flex items-center gap-3">
+        <span className="flex h-12 w-12 items-center justify-center rounded-[14px] text-white" style={{ background: "linear-gradient(135deg,#4285f4,#a259ff)" }}><Globe size={24} /></span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[16px] font-semibold">Browser / Google Cloud API key</div>
+          <div className="truncate text-[13px] text-label2">
+            {key ? (state === "ok" ? "Verified · used by browser automations" : state === "fail" ? "Key rejected — check or rotate it" : "Saved · test it to confirm") : "Optional · for browser automations and Google APIs"}
+          </div>
+        </div>
+        <span className="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold" style={{ background: `${tone}1f`, color: tone }}>
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: tone }} />{status}
+        </span>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 rounded-[12px] bg-grouped px-3">
+        <KeyRound size={14} className="shrink-0 text-label2" />
+        <input type={show ? "text" : "password"} value={key} autoComplete="off" spellCheck={false} placeholder="AIza…"
+          onChange={(e) => { setState("idle"); setMsg(""); setSettings((s) => ({ ...s, browserKey: e.target.value.trim() })); }}
+          className="h-10 w-full bg-transparent font-mono text-[13.5px] outline-none placeholder:text-label3" />
+        <button onClick={() => setShow(!show)} className="text-label2">{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+        <button disabled={!key || state === "testing"} onClick={test}
+          className="press shrink-0 rounded-full bg-surface px-3 py-1 text-[12.5px] font-semibold text-[#007aff] shadow-sm disabled:opacity-40">
+          {state === "testing" ? <Loader2 size={13} className="animate-spin" /> : state === "ok" ? <Check size={13} /> : "Test"}
+        </button>
+      </div>
+      {msg && (
+        <div className={cn("mt-1.5 flex items-center gap-1 text-[12.5px]", state === "ok" ? "text-[#34c759]" : "text-[#ff3b30]")}>
+          {state === "ok" ? <CheckCircle2 size={13} /> : <XCircle size={13} />}{msg}
+        </div>
+      )}
+      {!key && (
+        <div className="mt-2 text-[12px] leading-snug text-label2">
+          Create one in <b>Google Cloud Console → APIs &amp; Services → Credentials</b>. Restrict it to the APIs you use and rotate any key that was shared in chat.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ConnectionsView() {
   const settings = useStore((s) => s.settings);
   const setSettings = useStore((s) => s.setSettings);
@@ -371,6 +445,7 @@ export function ConnectionsView() {
           </div>
           {wa.connected ? <Pill color="#34c759" onClick={() => setWaOpen(true)}>Manage</Pill> : <button onClick={() => setWaOpen(true)} className="press rounded-full bg-[#25d366] px-4 py-2 text-[14px] font-semibold text-white">Connect</button>}
         </div>
+        <BrowserKeyCard />
 
         <div id="ai-keys" />
         <Group header="Other providers · bring your own key" footer="Coarena is already connected above. Add another provider only if you want a specific agent to use it.">
@@ -435,12 +510,12 @@ export function SettingsView() {
 
   const exportData = () => {
     const s = useStore.getState();
-    const data = JSON.stringify({ bots: s.bots, threads: s.threads, docs: s.docs, routines: s.routines, settings: { ...s.settings, keys: { coarena: "", xai: "", openai: "", deepseek: "", mistral: "", gemini: "" } } }, null, 2);
+    const data = JSON.stringify({ bots: s.bots, threads: s.threads, docs: s.docs, routines: s.routines, settings: { ...s.settings, browserKey: "", keys: { coarena: "", xai: "", openai: "", deepseek: "", mistral: "", gemini: "" } } }, null, 2);
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type: "application/json" })); a.download = `coarena-backup-${Date.now()}.json`; a.click();
   };
   const importData = () => {
     const i = document.createElement("input"); i.type = "file"; i.accept = "application/json";
-    i.onchange = async () => { try { const d = JSON.parse(await i.files![0].text()); const keys = useStore.getState().settings.keys; useStore.getState().importAll({ ...d, settings: { ...useStore.getState().settings, ...d.settings, keys } }); toast("Backup restored"); } catch { toast("Invalid backup file"); } };
+    i.onchange = async () => { try { const d = JSON.parse(await i.files![0].text()); const keys = useStore.getState().settings.keys; useStore.getState().importAll({ ...d, settings: { ...useStore.getState().settings, ...d.settings, keys, browserKey: useStore.getState().settings.browserKey } }); toast("Backup restored"); } catch { toast("Invalid backup file"); } };
     i.click();
   };
   const set = (p: Partial<typeof settings>) => setSettings((s) => ({ ...s, ...p }));
@@ -464,10 +539,12 @@ export function SettingsView() {
         </Group>
 
         <Group header="Coarena Free Model API" footer="One key powers every agent. Models load live from /v1/models; you can override the model per agent from the chat header.">
-          <Row icon={<KeyRound size={17} />} iconBg="#0a84ff" title={settings.keys.coarena ? "API key connected" : "Add your Coarena key"} subtitle={settings.keys.coarena ? `${settings.keys.coarena.slice(0, 6)}…${settings.keys.coarena.slice(-4)} · one key for all agents` : "coa_… · stored on this device"}
+          <Row icon={<KeyRound size={17} />} iconBg="#0a84ff" title={settings.keys.coarena ? "API key connected" : "Workspace key active"} subtitle={settings.keys.coarena ? `${settings.keys.coarena.slice(0, 6)}…${settings.keys.coarena.slice(-4)} · one key for all agents` : "COARENA_API_KEY on the server · nothing stored in the app"}
             right={<a href="#/connections" onClick={(e) => { e.preventDefault(); useRuntime.getState().set({ drawer: false }); window.dispatchEvent(new CustomEvent("coarena:navigate", { detail: "connections" })); }} className="rounded-full bg-[#007aff] px-3 py-1.5 text-[13px] font-semibold text-white">Manage</a>} />
           <Row icon={<Sparkles size={17} />} iconBg="#5e5ce6" title="Model catalogue" subtitle={`${models.length} model${models.length === 1 ? "" : "s"} available · ${models[0] ?? "—"}`}
             onClick={async () => { useRuntime.getState().set({ modelsLoading: true }); const m = await listCoarenaModels(settings.keys.coarena); useRuntime.getState().set({ models: m, modelsLoading: false }); toast(`${m.length} models loaded`); }} chevron />
+          <Row icon={<Globe size={17} />} iconBg="#4285f4" title={settings.browserKey ? "Browser / Google Cloud key saved" : "Browser / Google Cloud key"} subtitle={settings.browserKey ? `${settings.browserKey.slice(0, 6)}… · optional, for browser automations` : "Optional · AIza…"}
+            onClick={() => window.dispatchEvent(new CustomEvent("coarena:navigate", { detail: "connections" }))} chevron />
         </Group>
 
         <Group header="Appearance & language" footer="Agents always reply in the selected language — the Brain remembers this permanently. Long questions get long, detailed answers.">

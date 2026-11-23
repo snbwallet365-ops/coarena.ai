@@ -63,7 +63,24 @@ Resolution order for every request:
 | --- | --- |
 | Connections → Coarena | paste/replace the key, **Test** it, refresh the live model list, make Coarena the provider for every agent |
 | Connections → WhatsApp | one-tap `wa.me` connect, or a Cloud API token + phone-number ID with a **Test** check |
+| Connections → Browser / Google Cloud | optional `AIza…` key for browser automations and Google APIs, with a live **Test** check |
 | Settings → Provider keys | per-provider keys for xAI / OpenAI / DeepSeek / Mistral / Gemini |
+
+### The 8 built-in agents
+
+| Agent | Job |
+| --- | --- |
+| **Coarena** | Chief of Staff — plans, delegates, coordinates the team |
+| **Browser Agent** | browser-use with Playwright, live preview |
+| **Visa Expert** | refusals, appeals, reapplication strategy |
+| **Legal Docs Expert** | contracts and legal drafting |
+| **PDF Generator** | documents → PDF |
+| **App Builder** | idea → working web app |
+| **Researcher** | deep research with citations |
+| **Portal Verifier** | visa/portal verification, browser automation, **pauses for human approval** on terms, OTP, captcha and final submit, then summary + PDF report |
+
+`Portal Verifier` ships with the build (`DEFAULT_BOTS`) and a store migration (v5 → v6) adds it to
+existing workspaces automatically.
 
 ### Optional: real browser control (local Playwright computer)
 
