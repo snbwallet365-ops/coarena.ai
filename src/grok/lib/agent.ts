@@ -9,6 +9,12 @@ const R = () => useRuntime.getState();
 // ---------------- Local server ----------------
 export async function checkServer(): Promise<boolean> {
   const url = S().settings.server.url;
+  // A localhost computer server can only exist when the app itself runs locally.
+  // Skip the probe in a deployed/PWA origin instead of firing a doomed request.
+  if (/^(https?:)?\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(url) && !/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname)) {
+    R().set({ serverOnline: false });
+    return false;
+  }
   try {
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 1500);
     const r = await fetch(`${url.replace(/\/$/, "")}/health`, { signal: ctl.signal });
@@ -19,11 +25,68 @@ export async function checkServer(): Promise<boolean> {
   } catch { R().set({ serverOnline: false }); return false; }
 }
 const server = () => S().settings.server.url.replace(/\/$/, "");
-async function srv(path: string, body?: unknown) {
-  const r = await fetch(server() + path, { method: body ? "POST" : "GET", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
-  const j = await r.json();
-  if (!r.ok || j.error) throw new Error(j.error || r.statusText);
-  return j;
+
+function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
+
+/** True when the browser server refused the connection (offline / not started). */
+const isOffline = (e: any) => /failed to fetch|networkerror|econnrefused|load failed|aborted/i.test(String(e?.message ?? e));
+
+/**
+ * Call the local computer server with a hard timeout and one automatic retry,
+ * so a slow or restarting Playwright server never hangs a run.
+ */
+async function srv(path: string, body?: unknown, retries = 1): Promise<any> {
+  let lastErr: any;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 20000);
+    try {
+      const r = await fetch(server() + path, {
+        method: body ? "POST" : "GET", signal: ctl.signal,
+        headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined,
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.error) throw new Error(j.error || r.statusText || `Server ${r.status}`);
+      return j;
+    } catch (e: any) {
+      lastErr = e;
+      if (isOffline(e)) { R().set({ serverOnline: false }); break; }   // no point retrying a dead server
+      if (attempt < retries) await sleep(350 * (attempt + 1));
+    } finally { clearTimeout(t); }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr ?? "Browser server failed"));
+}
+
+// ---------------- Human Take Over / Resume ----------------
+/** Pause the agent and hand the browser to the human. Aborts the running turn. */
+export function takeOverControl(botId: string) {
+  const rt = R();
+  rt.controllers[botId]?.abort();
+  rt.set({ takeover: { botId, since: Date.now() }, live: { ...rt.live, [botId]: null } });
+  S().updateBot(botId, { status: "waiting", preview: "Human in control", updatedAt: Date.now() });
+  rt.showToast("You're in control — the agent is paused");
+}
+
+/** Hand control back: clears the pause and puts the agent back to idle. */
+export function resumeControl(botId: string) {
+  const rt = R();
+  if (!rt.takeover || rt.takeover.botId !== botId) return;
+  rt.set({ takeover: null });
+  S().updateBot(botId, { status: "idle", preview: "Ready when you are", updatedAt: Date.now() });
+  rt.showToast("Agent resumed — you can keep chatting");
+}
+
+/** Re-run a failed turn with the same prompt (removes the failed reply first). */
+export function retryTurn(botId: string, messageId: string) {
+  const thread = S().threads[botId] ?? [];
+  const idx = thread.findIndex((m) => m.id === messageId);
+  if (idx < 0) return;
+  let prompt = "";
+  for (let i = idx; i >= 0; i--) if (thread[i].role === "user") { prompt = thread[i].content; break; }
+  if (!prompt || R().live[botId]) return;
+  S().removeMsg(botId, messageId);
+  R().showToast("Retrying…");
+  runBot(botId, prompt);
 }
 
 // ---------------- Browser tools ----------------
@@ -135,7 +198,7 @@ To use a tool, reply with ONE tool call block and nothing after it:
 <tool>{"name":"TOOL_NAME","args":{...}}</tool>
 You may write one short sentence before the block saying what you're doing. Available tools:
 ${bot.tools.map((t) => "- " + TOOL_SPECS[t]).join("\n")}
-${bot.tools.includes("ask_bot") ? `Peer bots: ${peers}` : ""}
+${bot.tools.includes("ask_bot") ? `Peer agents: ${peers}` : ""}
 After each call you receive "TOOL_RESULT". Use as many steps as needed, then give your final answer in Markdown WITHOUT a tool block. Never fabricate tool results.`);
   }
   const pinned = s.docs.filter((d) => d.pinned);
@@ -147,7 +210,7 @@ Always write your ENTIRE reply in natural, fluent, native Bangla (বাংল�
   else parts.push("## LANGUAGE\nReply in the same language the user writes in.");
   if (s.settings.adaptive) parts.push(`## ANSWER DEPTH
 Match the depth to the question. Short or simple question → short, direct answer (1–4 sentences). Long, detailed, multi-part or expert question → a long, thorough, well-structured answer: headings, numbered steps, examples, tables/checklists, and cover every part of the question. Never pad, never skip important detail.`);
-  parts.push(`Current date/time: ${new Date().toString()}. User name: ${s.settings.userName}. Company/workspace: N Space. Format answers in clean Markdown.`);
+  parts.push(`Current date/time: ${new Date().toString()}. User name: ${s.settings.userName}. Company/workspace: Coarena. Format answers in clean Markdown.`);
   return parts.join("\n\n");
 }
 
@@ -174,6 +237,7 @@ export async function runBot(botId: string, userText: string, opt: { routine?: s
   const s = S();
   const bot0 = s.bots.find((b) => b.id === botId);
   if (!bot0 || R().live[botId]) return "";
+  if (R().takeover?.botId === botId) { R().showToast("Human in control — press Resume first"); return ""; }
 
   const attachText = (opt.attachments ?? []).map((a) => `\n\n[Attached file: ${a.name}]\n${a.text.slice(0, 20000)}`).join("");
   if (opt.routine) s.pushMsg(botId, { id: uid(), role: "note", content: `Routine ran · ${opt.routine}`, time: Date.now() });
@@ -186,6 +250,18 @@ export async function runBot(botId: string, userText: string, opt: { routine?: s
   const ctl = new AbortController();
   R().set({ live: { ...R().live, [botId]: mid }, controllers: { ...R().controllers, [botId]: ctl } });
   s.updateBot(botId, { status: "working", preview: opt.routine ? `Running routine: ${opt.routine}` : "Working…", updatedAt: Date.now() });
+
+  // Keep the Computer panel "live" even between tool calls: poll the real
+  // browser every ~900ms while this turn runs and the local server is online.
+  let hbStop = false;
+  (async () => {
+    while (!hbStop) {
+      if (R().serverOnline) {
+        try { const j = await srv("/browser/screenshot", undefined, 0); if (!hbStop && j?.screenshot) liveBrowser(bot, j.url || R().browser?.url || "", R().browser?.label ?? "Working", true, j.screenshot, j.title); } catch { /* server may be gone */ }
+      }
+      await sleep(900);
+    }
+  })();
 
   const patch = (fn: (m: any) => any) => S().patchMsg(botId, mid, fn);
   const addStep = (st: Step) => patch((m) => ({ ...m, steps: [...(m.steps ?? []), st] }));
@@ -230,10 +306,14 @@ export async function runBot(botId: string, userText: string, opt: { routine?: s
       }[call.name];
       addStep({ id: sid, tool: call.name, label, note: call.before || undefined, status: "running" });
       let result = "";
+      // Legal terms, OTPs, captchas, payments and final submits ALWAYS pause for a human,
+      // even when "Ask before actions" is switched off in Settings.
+      const SENSITIVE = /\b(otp|one[\s-]?time|verification code|2fa|captcha|password|passcode|pin)\b|accept|agree|terms|consent|i have read|submit|final|confirm|pay|payment|checkout|purchase|\bsign\b(?! in)/i;
+      const sensitiveAct = (call.name === "click" || call.name === "type") && SENSITIVE.test(String(a.text ?? a.selector ?? ""));
       try {
-        if ((call.name === "click" || call.name === "type") && S().settings.approvals) {
-          setStep(sid, { status: "approval", detail: call.name === "type" ? `“${a.text}”` : undefined });
-          s.updateBot(botId, { status: "waiting", preview: `Needs approval: ${label}` });
+        if ((call.name === "click" || call.name === "type") && (S().settings.approvals || sensitiveAct)) {
+          setStep(sid, { status: "approval", detail: sensitiveAct ? `Sensitive step: ${call.name === "type" ? `“${String(a.text ?? "").slice(0, 40)}”` : `“${String(a.text ?? "").slice(0, 60)}”`}` : call.name === "type" ? `“${a.text}”` : undefined });
+          s.updateBot(botId, { status: "waiting", preview: sensitiveAct ? "Needs you: terms / OTP / submit" : `Needs approval: ${label}` });
           const ok = await requestApproval(sid);
           s.updateBot(botId, { status: "working", preview: "Working…" });
           if (!ok) { setStep(sid, { status: "denied" }); msgs.push({ role: "user", content: `TOOL_RESULT ${call.name}: The user DENIED this action. Do not retry it; continue or explain.` }); continue; }
@@ -282,7 +362,7 @@ export async function runBot(botId: string, userText: string, opt: { routine?: s
             S().pushMsg(peer.id, { id: uid(), role: "note", content: `${bot.name} asked: ${a.message}`, time: Date.now(), from: bot.name });
             S().updateBot(peer.id, { status: "working", preview: `Helping ${bot.name}…` });
             const ans = await streamChat({ provider: peer.provider, model: peer.model, agentId: peer.agentId, apiKey: S().settings.keys[peer.provider], signal: ctl.signal, proxy: S().settings.server.useProxy && R().serverOnline ? S().settings.server.url : null,
-              messages: [{ role: "system", content: peer.system + "\n\n" + (KNOWLEDGE[peer.knowledge ?? ""] ?? "") + `\nYou are answering a request from peer bot ${bot.name}. Be concise.` }, { role: "user", content: String(a.message) }] });
+              messages: [{ role: "system", content: peer.system + "\n\n" + (KNOWLEDGE[peer.knowledge ?? ""] ?? "") + `\nYou are answering a request from peer agent ${bot.name}. Be concise.` }, { role: "user", content: String(a.message) }] });
             S().pushMsg(peer.id, { id: uid(), role: "assistant", content: ans, time: Date.now(), model: `${peer.provider}/${peer.model}` });
             S().updateBot(peer.id, { status: "done", preview: ans.slice(0, 70), updatedAt: Date.now() });
             result = ans; setStep(sid, { status: "done", detail: `${peer.name} replied` }); break;
@@ -307,6 +387,7 @@ export async function runBot(botId: string, userText: string, opt: { routine?: s
     patch((m) => ({ ...m, error: aborted ? undefined : err, content: m.content || (aborted ? "_Stopped._" : "") }));
     S().updateBot(botId, { status: aborted ? "idle" : "error", preview: aborted ? "Stopped" : err.startsWith("NO_KEY") ? "Add an API key to start" : "Something went wrong", updatedAt: Date.now() });
   } finally {
+    hbStop = true;
     const live = { ...R().live }; delete live[botId];
     const ctls = { ...R().controllers }; delete ctls[botId];
     R().set({ live, controllers: ctls });

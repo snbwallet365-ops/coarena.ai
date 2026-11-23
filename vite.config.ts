@@ -23,6 +23,9 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    // Accept Arena's preview host so the live preview can load.
+    server: { allowedHosts: true },
+    preview: { allowedHosts: true },
     resolve: {
       alias: [
         // Pin entities to the hoisted v4.5.0 copy for old importers; exact matches only so

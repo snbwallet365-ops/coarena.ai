@@ -2,10 +2,11 @@
 import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ChevronRight, Globe, Search, MousePointerClick, Keyboard, FileText, MessageCircle, Brain, Users, Check, Loader2, Copy, FileDown, RotateCcw, Volume2, Play, KeyRound, AlertTriangle, Paperclip, ExternalLink, Sparkles } from "lucide-react";
+import { ChevronRight, Globe, Search, MousePointerClick, Keyboard, FileText, MessageCircle, Brain, Users, Check, Loader2, Copy, FileDown, RotateCcw, Volume2, Play, KeyRound, AlertTriangle, Paperclip, ExternalLink, Sparkles, ThumbsUp, ThumbsDown } from "lucide-react";
 import type { Bot, Message, Step } from "../lib/store";
-import { useRuntime, PROVIDERS } from "../lib/store";
+import { useRuntime, useStore, PROVIDERS } from "../lib/store";
 import { resolveApproval, visibleText } from "../lib/agent";
+import { sendCoarenaFeedback } from "../lib/providers";
 import { pdfFromMarkdown } from "../lib/pdf";
 import BotAvatar from "./BotAvatar";
 import { cn } from "../utils/cn";
@@ -124,6 +125,14 @@ function MessageItem({ m, bot, live, onPreview, onOpenKeys, onRetry, onToast }: 
     u.onend = () => setSpeaking(false); setSpeaking(true); speechSynthesis.speak(u);
   };
   const shareWa = () => window.open(`https://wa.me/?text=${encodeURIComponent(`${bot.name}:\n\n${text}`.slice(0, 3500))}`, "_blank");
+  const rate = async (rating: 1 | -1) => {
+    if (m.rating === rating) return;
+    useStore.getState().rateMessage(bot.id, m.id, rating);
+    if (useStore.getState().settings.feedback) {
+      const ok = await sendCoarenaFeedback({ rating, message_id: m.id, model: m.model, content: text.slice(0, 1200), agent: bot.name }, useStore.getState().settings.keys.coarena);
+      onToast(ok ? "Thanks — rating sent to Coarena" : "Rating saved locally");
+    } else onToast("Rating saved locally");
+  };
 
   return (
     <div className="fade-up group flex gap-3">
@@ -178,11 +187,17 @@ function MessageItem({ m, bot, live, onPreview, onOpenKeys, onRetry, onToast }: 
         )}
 
         {!live && (text || m.error) && (
-          <div className="mt-1.5 flex flex-wrap gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+          <div className="mt-1.5 flex flex-wrap gap-0.5 opacity-100 transition-opacity md:opacity-55 md:group-hover:opacity-100">
             {text && <ActionBtn title="Copy" onClick={() => { navigator.clipboard.writeText(text); onToast("Copied"); }}><Copy size={15} /></ActionBtn>}
             {text && <ActionBtn title="Export PDF" onClick={() => { const t = text.match(/^#\s+(.+)$/m)?.[1] ?? `${bot.name} - ${new Date().toLocaleDateString()}`; pdfFromMarkdown(t, text); onToast("PDF downloaded"); }}><FileDown size={15} /></ActionBtn>}
             {text && <ActionBtn title="Share to WhatsApp" onClick={shareWa}><MessageCircle size={15} /></ActionBtn>}
             {text && <ActionBtn title="Read aloud" onClick={speak}><Volume2 size={15} className={speaking ? "text-[#007aff]" : ""} /></ActionBtn>}
+            {text && bot.provider === "coarena" && (
+              <>
+                <ActionBtn title={m.rating === 1 ? "You rated this up" : "Good reply"} onClick={() => rate(1)} active={m.rating === 1}><ThumbsUp size={15} /></ActionBtn>
+                <ActionBtn title={m.rating === -1 ? "You rated this down" : "Bad reply"} onClick={() => rate(-1)} active={m.rating === -1}><ThumbsDown size={15} /></ActionBtn>
+              </>
+            )}
             <ActionBtn title="Retry" onClick={onRetry}><RotateCcw size={15} /></ActionBtn>
             {steps.find((s) => s.url) && <ActionBtn title="Open page" onClick={() => window.open(steps.filter((s) => s.url).pop()!.url, "_blank")}><ExternalLink size={15} /></ActionBtn>}
           </div>
@@ -192,8 +207,9 @@ function MessageItem({ m, bot, live, onPreview, onOpenKeys, onRetry, onToast }: 
   );
 }
 
-function ActionBtn({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title: string }) {
-  return <button title={title} onClick={onClick} className="press flex h-8 w-8 items-center justify-center rounded-full text-label2 hover:bg-fill hover:text-label">{children}</button>;
+function ActionBtn({ children, onClick, title, active }: { children: React.ReactNode; onClick: () => void; title: string; active?: boolean }) {
+  return <button title={title} aria-label={title} aria-pressed={active} onClick={onClick}
+    className={cn("press flex h-8 w-8 items-center justify-center rounded-full transition-colors", active ? "bg-[#007aff] text-white" : "text-label2 hover:bg-fill hover:text-label")}>{children}</button>;
 }
 
 export default memo(MessageItem);

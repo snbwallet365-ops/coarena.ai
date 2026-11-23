@@ -9,6 +9,11 @@ import { Pin } from "lucide-react";
 const PALETTE = ["#007aff", "#34c759", "#ff9500", "#af52de", "#ff2d55", "#5856d6", "#00c7be", "#fa520f"];
 
 /** Animated mycelium network: a central mushroom with hyphae growing to every memory. */
+function h0(d: BrainDoc) {
+  let h = 0; for (const ch of d.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h;
+}
+
 function Mycelium({ docs, onPick }: { docs: BrainDoc[]; onPick: (d: BrainDoc) => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const nodesRef = useRef<{ x: number; y: number; r: number; c: string; d: BrainDoc }[]>([]);
@@ -28,14 +33,20 @@ function Mycelium({ docs, onPick }: { docs: BrainDoc[]; onPick: (d: BrainDoc) =>
       ctx.clearRect(0, 0, W, H);
       const t = (now - t0) / 1000;
       const labelC = getComputedStyle(document.documentElement).getPropertyValue("--label").trim() || "#3c3c43";
-      const cx = W / 2, cy = H * 0.56, R = Math.min(W, H) * 0.42;
+      // Spread on a wide ellipse so labels never collide, and keep them inside the canvas.
+      const cx = W / 2, cy = H * 0.5;
+      const Rx = Math.max(120, Math.min(W * 0.40, 330));
+      const Ry = Math.max(52, Math.min(H * 0.30, 120));
       const grow = Math.min(1, t / 1.6);
+      const font = '600 11px -apple-system, BlinkMacSystemFont, "Noto Sans Bengali", "Segoe UI", Roboto, sans-serif';
+      const nSeeds = Math.max(seeds.length, 1);
 
       const nodes: typeof nodesRef.current = [];
       seeds.forEach((s, i) => {
-        const a = s.a + Math.sin(t * 0.25 + i) * 0.04;
-        const x = cx + Math.cos(a) * R * s.dist * 1.25;
-        const y = cy + Math.sin(a) * R * s.dist * 0.75;
+        // Even angular spread starting at the top, with a stable per-doc wobble.
+        const a = -Math.PI / 2 + (i / nSeeds) * Math.PI * 2 + (h0(s.d) % 100) / 900 + Math.sin(t * 0.25 + i) * 0.03;
+        const x = cx + Math.cos(a) * Rx;
+        const y = cy + Math.sin(a) * Ry;
         // hypha path
         const mx = (cx + x) / 2 + Math.sin(t * 0.6 + s.wob * 6) * 22, my = (cy + y) / 2 + Math.cos(t * 0.5 + s.wob * 6) * 18;
         ctx.strokeStyle = s.c + "55"; ctx.lineWidth = 1.4; ctx.lineCap = "round";
@@ -56,8 +67,20 @@ function Mycelium({ docs, onPick }: { docs: BrainDoc[]; onPick: (d: BrainDoc) =>
         if (grow > 0.95) {
           ctx.fillStyle = s.c + "22"; ctx.beginPath(); ctx.arc(x, y, r + 6 + Math.sin(t * 2 + i) * 2, 0, 7); ctx.fill();
           ctx.fillStyle = s.c; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
-          ctx.fillStyle = labelC; ctx.font = "600 11px -apple-system, sans-serif"; ctx.textAlign = "center";
-          ctx.fillText(s.d.title.length > 22 ? s.d.title.slice(0, 21) + "…" : s.d.title, x, y + r + 15);
+          ctx.fillStyle = labelC; ctx.font = font; ctx.textAlign = "center";
+          // Wrap the title onto at most two short lines so nothing is clipped or squeezed.
+          const words = s.d.title.split(/\s+/);
+          const l1 = words.slice(0, Math.ceil(words.length / 2) || 1).join(" ");
+          const l2 = words.slice(Math.ceil(words.length / 2) || 1).join(" ");
+          const lines = l2 ? [l1, l2] : [l1];
+          const maxW = 210;
+          const above = y < cy;
+          const lh = 12.5;
+          let ly = above ? y - r - 8 : y + r + 16;
+          if (ly + (lines.length - 1) * lh > H - 4) ly = y - r - 8 - (lines.length - 1) * lh;
+          if (ly < 10) ly = y + r + 16;
+          const lx = Math.min(Math.max(x, maxW / 2 + 2), W - maxW / 2 - 2);
+          lines.forEach((ln, li) => ctx.fillText(ln.length > 26 ? ln.slice(0, 25) + "…" : ln, lx, ly + li * lh, maxW));
         }
         nodes.push({ x, y, r: r + 6, c: s.c, d: s.d });
       });
@@ -68,11 +91,16 @@ function Mycelium({ docs, onPick }: { docs: BrainDoc[]; onPick: (d: BrainDoc) =>
       ctx.fillStyle = "#f5efe6"; ctx.strokeStyle = "#e3d9c9"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(cx - 9, cy + 8); ctx.quadraticCurveTo(cx - 11, cy - 14 + bob, cx - 7, cy - 22 + bob); ctx.lineTo(cx + 7, cy - 22 + bob); ctx.quadraticCurveTo(cx + 11, cy - 14 + bob, cx + 9, cy + 8); ctx.closePath(); ctx.fill(); ctx.stroke();
       const g = ctx.createLinearGradient(cx, cy - 58, cx, cy - 18); g.addColorStop(0, "#ff5a4e"); g.addColorStop(1, "#e0352b");
-      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, cy - 22 + bob, 34, 30, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, cy - 22 + bob, Math.min(34, W * 0.06), 30, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
       ctx.fillStyle = "#fff";
       [[-16, -34, 5], [4, -44, 6], [18, -30, 4.5], [-4, -28, 3.5]].forEach(([dx, dy, r]) => { ctx.beginPath(); ctx.arc(cx + dx, cy + dy + bob, r, 0, 7); ctx.fill(); });
       ctx.fillStyle = "#111"; ctx.beginPath(); ctx.ellipse(cx - 4, cy - 8 + bob, 1.8, 2.6 * (Math.sin(t * 2.5) > 0.97 ? 0.15 : 1), 0, 0, 7); ctx.ellipse(cx + 4, cy - 8 + bob, 1.8, 2.6 * (Math.sin(t * 2.5) > 0.97 ? 0.15 : 1), 0, 0, 7); ctx.fill();
-      ctx.fillStyle = labelC; ctx.globalAlpha = .6; ctx.font = "600 11px -apple-system, sans-serif"; ctx.textAlign = "center"; ctx.fillText(`${docs.length} memories`, cx, cy + 26); ctx.globalAlpha = 1;
+      // Caption: centred under the mushroom on wide canvases, tucked into the corner on narrow ones
+      // so it never collides with the left/right node labels.
+      ctx.fillStyle = labelC; ctx.globalAlpha = .6; ctx.font = font;
+      if (W < 640) { ctx.textAlign = "left"; ctx.fillText(`${docs.length} memories`, 10, 16, 160); }
+      else { ctx.textAlign = "center"; ctx.fillText(`${docs.length} memories`, cx, cy + 24, Math.min(180, W * 0.3)); }
+      ctx.globalAlpha = 1;
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
@@ -84,7 +112,7 @@ function Mycelium({ docs, onPick }: { docs: BrainDoc[]; onPick: (d: BrainDoc) =>
     const n = nodesRef.current.find((n) => Math.hypot(n.x - x, n.y - y) < n.r + 4);
     if (n) onPick(n.d);
   };
-  return <canvas ref={ref} onClick={click} className="h-[280px] w-full cursor-pointer md:h-[340px]" />;
+  return <canvas ref={ref} onClick={click} className="h-[300px] w-full cursor-pointer md:h-[360px]" />;
 }
 
 export default function BrainView() {

@@ -2,19 +2,24 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { VISA_KNOWLEDGE, LEGAL_KNOWLEDGE, PDF_KNOWLEDGE, GROK_HARNESS_KNOWLEDGE, BASE44_KNOWLEDGE, BROWSER_AGENT_KNOWLEDGE } from "./knowledge";
+import { COARENA_API_KEY, COARENA_DEFAULT_MODEL, COARENA_FALLBACK_MODELS } from "./coarena";
 
-export type Provider = "xai" | "openai" | "deepseek" | "mistral" | "gemini";
+export type Provider = "coarena" | "xai" | "openai" | "deepseek" | "mistral" | "gemini";
 export type BotStatus = "idle" | "working" | "waiting" | "done" | "error";
 export type Shape = "circle" | "squircle" | "triangle" | "hex" | "diamond" | "blob" | "pill" | "star";
 export type ToolName = "search" | "browse" | "click" | "type" | "pdf" | "whatsapp" | "remember" | "ask_bot";
 
-export const PROVIDERS: Record<Provider, { label: string; color: string; models: string[]; keyUrl: string; keyHint: string }> = {
+export const PROVIDERS: Record<Provider, { label: string; color: string; models: string[]; keyUrl: string; keyHint: string; default?: boolean }> = {
+  coarena: { label: "Coarena", color: "#0a84ff", models: COARENA_FALLBACK_MODELS, keyUrl: "https://coarena.ai", keyHint: "coa_…", default: true },
   xai: { label: "Grok · xAI", color: "#111111", models: ["grok-4", "grok-4-fast", "grok-3", "grok-3-mini", "grok-code-fast-1"], keyUrl: "https://console.x.ai", keyHint: "xai-…" },
   openai: { label: "OpenAI", color: "#10a37f", models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1", "gpt-4.1-mini", "gpt-5", "gpt-5-mini", "o4-mini"], keyUrl: "https://platform.openai.com/api-keys", keyHint: "sk-…" },
   deepseek: { label: "DeepSeek", color: "#4d6bfe", models: ["deepseek-chat", "deepseek-reasoner"], keyUrl: "https://platform.deepseek.com/api_keys", keyHint: "sk-…" },
   mistral: { label: "Mistral", color: "#fa520f", models: ["mistral-large-latest", "mistral-medium-latest", "mistral-small-latest", "codestral-latest", "magistral-medium-latest"], keyUrl: "https://console.mistral.ai/api-keys", keyHint: "Mistral API key" },
   gemini: { label: "Google Gemini", color: "#1a73e8", models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.5-flash-lite"], keyUrl: "https://aistudio.google.com/apikey", keyHint: "AIza…" },
 };
+
+/** All providers that speak the OpenAI-compatible chat-completions dialect. */
+export const OPENAI_COMPATIBLE: Provider[] = ["coarena", "xai", "openai", "deepseek", "mistral"];
 
 export const TOOL_INFO: Record<ToolName, { label: string; desc: string }> = {
   search: { label: "Web search", desc: "Search the web for current information" },
@@ -24,7 +29,7 @@ export const TOOL_INFO: Record<ToolName, { label: string; desc: string }> = {
   pdf: { label: "PDF generator", desc: "Create & download PDF documents" },
   whatsapp: { label: "WhatsApp", desc: "Send results to WhatsApp" },
   remember: { label: "Memory", desc: "Save facts into the Brain" },
-  ask_bot: { label: "Ask another Bot", desc: "Delegate to a peer Bot" },
+  ask_bot: { label: "Ask another Agent", desc: "Delegate to a peer Agent" },
 };
 
 export interface Bot {
@@ -44,6 +49,8 @@ export interface Message {
   id: string; role: "user" | "assistant" | "note";
   content: string; reasoning?: string; steps?: Step[]; time: number;
   error?: string; model?: string; from?: string; attachments?: { name: string; size: number }[];
+  /** 1 = thumbs up, -1 = thumbs down (sent to Coarena /v1/feedback). */
+  rating?: 1 | -1;
 }
 
 export interface BrainDoc { id: string; title: string; content: string; source: string; createdAt: number; botId?: string; pinned?: boolean }
@@ -60,40 +67,63 @@ export interface Settings {
   approvals: boolean; notifications: boolean; maxSteps: number; temperature: number;
   userName: string;
   theme: "light" | "dark"; language: "bn" | "en" | "auto"; adaptive: boolean;
+  /** Share anonymous thumbs up/down ratings with Coarena. */
+  feedback: boolean;
+  /** Browser / Google Cloud API key (used by browser automations, PageSpeed checks, etc.). */
+  browserKey: string;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 export { uid };
 
+/** Role prompt for the permanent "Portal Verifier" agent (visa, portal verification, browser automation, PDF summary). */
+export const PORTAL_VERIFIER_PROMPT = `You are a practical Visa, Portal Verification, Browser Automation, and Document Summary Agent inside the Coarena workspace.
+
+## How you work
+1. VERIFY — check visa / portal information, document status or the browser task you were given. Verify every input before you act (country, visa type, application number, URL) and log each step in one short sentence before doing it.
+2. PAUSE — never proceed on your own when you reach: legal terms & conditions, OTP or any sensitive code, captcha, payment, or the final submit button of a form. Stop, say exactly what is needed, and wait for Human Take Over / approval. Never type an OTP or accept terms yourself.
+3. RESUME — once the user confirms, continue cleanly, extract the results, then produce:
+   • a short structured summary (status, what was verified, what is missing, next actions);
+   • a PDF report when one is useful (use the pdf tool);
+   • a delivery confirmation (what was sent where — WhatsApp, PDF download, Brain memory).
+
+## Rules
+- Keep answers clear, structured and accurate — headings, numbered steps, tables where useful.
+- Never invent an unverified status. If something could not be confirmed, say so explicitly.
+- Never expose secrets: do not repeat API keys, OTPs, passwords or full ID numbers in chat or documents.
+- If a page fails to load, retry once, then fall back to search or ask the user.
+- Reply in the user's language; keep legal/visa codes, URLs and document names in their original form.`;
+
 const DEFAULT_BOTS: Bot[] = [
-  { id: "grok", name: "nSpace", title: "Chief of Staff Agent", shape: "circle", color: "#1c1c1e", provider: "xai", model: "grok-4", main: true,
-    system: "You are nSpace, the user's Chief of Staff agent at nSpace Visa Agency. You coordinate other specialist bots, plan work, research, and get things done. Be proactive, smart and practical.",
+  { id: "coarena", name: "Coarena", title: "Chief of Staff Agent", shape: "circle", color: "#1c1c1e", provider: "coarena", model: COARENA_DEFAULT_MODEL, main: true,
+    system: "You are Coarena, the user's Chief of Staff agent in the Coarena AI workspace. You coordinate other specialist agents, plan work, research, and get things done. Be proactive, smart and practical.",
     knowledge: "grok", tools: ["search", "browse", "remember", "pdf", "whatsapp", "ask_bot"], status: "idle", preview: "Ready to coordinate your team", updatedAt: Date.now() },
-  { id: "browser", name: "Browser Agent", title: "Browser use · Playwright", shape: "squircle", color: "#007aff", provider: "openai", model: "gpt-4o-mini",
+  { id: "browser", name: "Browser Agent", title: "Browser use · Playwright", shape: "squircle", color: "#007aff", provider: "coarena", model: COARENA_DEFAULT_MODEL,
     system: "You are a browser-use agent. You navigate websites, read pages and complete web tasks step by step.",
     knowledge: "browser", tools: ["search", "browse", "click", "type", "remember"], status: "idle", preview: "Give me a web task", updatedAt: Date.now() - 1000 },
-  { id: "visa", name: "Visa Expert", title: "Visa & refusal specialist", shape: "star", color: "#ff9500", provider: "gemini", model: "gemini-2.5-flash",
+  { id: "visa", name: "Visa Expert", title: "Visa & refusal specialist", shape: "star", color: "#ff9500", provider: "coarena", model: COARENA_DEFAULT_MODEL,
     system: "You are a senior visa consultant specialised in visa applications, refusal analysis, appeals and reapplication strategy for the US, UK, Schengen, Canada, Australia and more. Ask for the refusal letter wording, country, visa type and profile when missing. Produce clear action plans, checklists and cover letters.",
     knowledge: "visa", tools: ["search", "browse", "pdf", "remember", "whatsapp"], status: "idle", preview: "Analyse a visa refusal", updatedAt: Date.now() - 2000 },
-  { id: "legal", name: "Legal Docs Expert", title: "Contracts & legal drafting", shape: "hex", color: "#5856d6", provider: "openai", model: "gpt-4o",
+  { id: "legal", name: "Legal Docs Expert", title: "Contracts & legal drafting", shape: "hex", color: "#5856d6", provider: "coarena", model: COARENA_DEFAULT_MODEL,
     system: "You are an expert legal drafter. You create complete, professional legal documents with numbered clauses, placeholders and signature blocks.",
     knowledge: "legal", tools: ["pdf", "search", "remember"], status: "idle", preview: "Draft an NDA, contract or affidavit", updatedAt: Date.now() - 3000 },
-  { id: "pdf", name: "PDF Generator", title: "Documents → PDF", shape: "pill", color: "#ff3b30", provider: "deepseek", model: "deepseek-chat",
+  { id: "pdf", name: "PDF Generator", title: "Documents → PDF", shape: "pill", color: "#ff3b30", provider: "coarena", model: COARENA_DEFAULT_MODEL,
     system: "You are a PDF document expert. You write beautifully structured documents and export them as PDF.",
     knowledge: "pdf", tools: ["pdf"], status: "idle", preview: "Reports, CVs, invoices as PDF", updatedAt: Date.now() - 4000 },
-  { id: "base44", name: "App Builder", title: "Base44-style app agent", shape: "diamond", color: "#34c759", provider: "openai", model: "gpt-4o",
-    system: "You are an app-builder agent like Base44. You turn ideas into complete working web apps.",
+  { id: "base44", name: "App Builder", title: "Full-stack app agent", shape: "diamond", color: "#34c759", provider: "coarena", model: COARENA_DEFAULT_MODEL,
+    system: "You are an app-builder agent. You turn ideas into complete working web apps.",
     knowledge: "base44", tools: [], status: "idle", preview: "Describe an app — get it running", updatedAt: Date.now() - 5000 },
-  { id: "mistral", name: "Mistral Agent", title: "Mistral Agents API", shape: "triangle", color: "#fa520f", provider: "mistral", model: "mistral-large-latest",
-    system: "You are a helpful Mistral-powered agent.", tools: ["search", "browse", "remember"], status: "idle", preview: "Connect an agent_id or chat directly", updatedAt: Date.now() - 6000 },
-  { id: "deepseek", name: "Researcher", title: "DeepSeek reasoning", shape: "blob", color: "#4d6bfe", provider: "deepseek", model: "deepseek-chat",
+  { id: "researcher", name: "Researcher", title: "Deep research & citations", shape: "blob", color: "#4d6bfe", provider: "coarena", model: COARENA_DEFAULT_MODEL,
     system: "You are a meticulous research analyst. Search, read sources and produce cited, structured answers.",
-    tools: ["search", "browse", "pdf", "remember"], status: "idle", preview: "Deep research with sources", updatedAt: Date.now() - 7000 },
+    tools: ["search", "browse", "pdf", "remember"], status: "idle", preview: "Deep research with sources", updatedAt: Date.now() - 6000 },
+  { id: "portal", name: "Portal Verifier", title: "Visa, portal verification & PDF summary", shape: "squircle", color: "#af52de", provider: "coarena", model: COARENA_DEFAULT_MODEL, knowledge: "visa",
+    system: PORTAL_VERIFIER_PROMPT,
+    tools: ["search", "browse", "click", "type", "remember", "pdf", "whatsapp"], status: "idle", preview: "Verify a visa portal or case status", updatedAt: Date.now() - 6500 },
 ];
 
 const SEED_DOCS: BrainDoc[] = [
   { id: "k-lang", title: "ভাষা পছন্দ · Always reply in Bangla", content: "The user's permanent preference: every reply must be written in natural, fluent, native Bangla (বাংলা). Keep technical terms, code, URLs, visa codes and proper nouns in original form where natural.", source: "Built-in", createdAt: Date.now(), pinned: true },
-  { id: "k-grok", title: "How Grok Bot works", content: GROK_HARNESS_KNOWLEDGE.trim(), source: "Built-in", createdAt: Date.now() },
+  { id: "k-grok", title: "How Coarena agents work", content: GROK_HARNESS_KNOWLEDGE.trim(), source: "Built-in", createdAt: Date.now() },
   { id: "k-visa", title: "Visa refusal knowledge", content: VISA_KNOWLEDGE.trim(), source: "Built-in", createdAt: Date.now() },
   { id: "k-legal", title: "Legal drafting handbook", content: LEGAL_KNOWLEDGE.trim(), source: "Built-in", createdAt: Date.now() },
 ];
@@ -105,7 +135,8 @@ export const KNOWLEDGE: Record<string, string> = {
 interface State {
   bots: Bot[]; threads: Record<string, Message[]>; docs: BrainDoc[]; routines: Routine[]; sessions: BrowserSession[]; flows: Flow[]; settings: Settings;
   addBot: (b: Partial<Bot>) => string; updateBot: (id: string, p: Partial<Bot>) => void; removeBot: (id: string) => void;
-  pushMsg: (botId: string, m: Message) => void; patchMsg: (botId: string, id: string, fn: (m: Message) => Message) => void; clearThread: (botId: string) => void;
+  pushMsg: (botId: string, m: Message) => void; removeMsg: (botId: string, id: string) => void; patchMsg: (botId: string, id: string, fn: (m: Message) => Message) => void; clearThread: (botId: string) => void;
+  rateMessage: (botId: string, id: string, rating: 1 | -1) => void;
   addDoc: (d: Omit<BrainDoc, "id" | "createdAt">) => void; updateDoc: (id: string, p: Partial<BrainDoc>) => void; removeDoc: (id: string) => void;
   addRoutine: (r: Omit<Routine, "id">) => void; updateRoutine: (id: string, p: Partial<Routine>) => void; removeRoutine: (id: string) => void;
   addFlow: (f: Omit<Flow, "id">) => string; updateFlow: (id: string, p: Partial<Flow>) => void; removeFlow: (id: string) => void;
@@ -115,26 +146,27 @@ interface State {
 }
 
 const DEFAULT_SETTINGS: Settings = {
-  keys: { xai: "", openai: "", deepseek: "", mistral: "", gemini: "" },
+  keys: { coarena: "", xai: "", openai: "", deepseek: "", mistral: "", gemini: "" },
+  browserKey: "",
   whatsapp: { phone: "", token: "", phoneNumberId: "", connected: false },
   server: { url: "http://localhost:8787", useProxy: false },
   approvals: true, notifications: false, maxSteps: 6, temperature: 0.7, userName: "You",
-  theme: "light", language: "en", adaptive: true,
+  theme: "light", language: "en", adaptive: true, feedback: true,
 };
 
 const initial = () => ({
   bots: DEFAULT_BOTS, threads: {} as Record<string, Message[]>, docs: SEED_DOCS, sessions: [] as BrowserSession[],
   routines: [
-    { id: "r1", botId: "grok", name: "Morning briefing", prompt: "Give me a short morning briefing: top tech & world headlines today with sources.", everyMinutes: 1440, enabled: false },
+    { id: "r1", botId: "coarena", name: "Morning briefing", prompt: "Give me a short morning briefing: top tech & world headlines today with sources.", everyMinutes: 1440, enabled: false },
     { id: "r2", botId: "visa", name: "Visa policy watch", prompt: "Search for the latest visa policy changes this week (US, UK, Schengen, Canada) and summarise.", everyMinutes: 10080, enabled: false },
   ] as Routine[],
   flows: [
     { id: "f1", name: "Visa research → PDF checklist", trigger: "manual", everyMinutes: 1440, output: "pdf", enabled: true, steps: [
-      { id: "s1", botId: "deepseek", prompt: "Search the web for the latest official UK Standard Visitor visa requirements and fees for 2026. List the key facts with source URLs." },
+      { id: "s1", botId: "researcher", prompt: "Search the web for the latest official UK Standard Visitor visa requirements and fees for 2026. List the key facts with source URLs." },
       { id: "s2", botId: "visa", prompt: "Using the research below, write a complete, well-structured document checklist and approval tips for a UK visitor visa applicant from Bangladesh.\n\n{{previous}}" },
     ] },
     { id: "f2", name: "Daily AI news → Brain", trigger: "schedule", everyMinutes: 1440, output: "brain", enabled: false, steps: [
-      { id: "s1", botId: "grok", prompt: "Search today's most important AI agent news and summarise the top 5 items with links." },
+      { id: "s1", botId: "coarena", prompt: "Search today's most important AI agent news and summarise the top 5 items with links." },
     ] },
   ] as Flow[],
   settings: DEFAULT_SETTINGS,
@@ -146,14 +178,16 @@ export const useStore = create<State>()(
       ...initial(),
       addBot: (b) => {
         const id = uid();
-        set((s) => ({ bots: [{ id, name: "New Bot", title: "Teammate", shape: "blob", color: "#007aff", provider: "openai", model: "gpt-4o-mini", system: "You are a helpful AI teammate.", tools: ["search", "browse", "remember"], status: "idle", preview: "Ready when you are", updatedAt: Date.now(), ...b } as Bot, ...s.bots] }));
+        set((s) => ({ bots: [{ id, name: "New Agent", title: "Teammate", shape: "blob", color: "#007aff", provider: "coarena", model: COARENA_DEFAULT_MODEL, system: "You are a helpful AI teammate.", tools: ["search", "browse", "remember"], status: "idle", preview: "Ready when you are", updatedAt: Date.now(), ...b } as Bot, ...s.bots] }));
         return id;
       },
       updateBot: (id, p) => set((s) => ({ bots: s.bots.map((b) => (b.id === id ? { ...b, ...p } : b)) })),
       removeBot: (id) => set((s) => { const t = { ...s.threads }; delete t[id]; return { bots: s.bots.filter((b) => b.id !== id), threads: t, routines: s.routines.filter((r) => r.botId !== id) }; }),
       pushMsg: (botId, m) => set((s) => ({ threads: { ...s.threads, [botId]: [...(s.threads[botId] ?? []), m] } })),
+      removeMsg: (botId, id) => set((s) => ({ threads: { ...s.threads, [botId]: (s.threads[botId] ?? []).filter((m) => m.id !== id) } })),
       patchMsg: (botId, id, fn) => set((s) => ({ threads: { ...s.threads, [botId]: (s.threads[botId] ?? []).map((m) => (m.id === id ? fn(m) : m)) } })),
       clearThread: (botId) => set((s) => ({ threads: { ...s.threads, [botId]: [] } })),
+      rateMessage: (botId, id, rating) => set((s) => ({ threads: { ...s.threads, [botId]: (s.threads[botId] ?? []).map((m) => (m.id === id ? { ...m, rating } : m)) } })),
       addDoc: (d) => set((s) => ({ docs: [{ ...d, id: uid(), createdAt: Date.now() }, ...s.docs] })),
       updateDoc: (id, p) => set((s) => ({ docs: s.docs.map((d) => (d.id === id ? { ...d, ...p } : d)) })),
       removeDoc: (id) => set((s) => ({ docs: s.docs.filter((d) => d.id !== id) })),
@@ -170,20 +204,51 @@ export const useStore = create<State>()(
       resetAll: () => set(initial()),
     }),
     {
+      // Storage key kept from the previous release so existing chats & memories survive the rebrand.
       name: "grokbot-v2",
-      version: 4,
+      version: 6,
       partialize: (s) => ({ bots: s.bots.map((b) => ({ ...b, status: b.status === "working" ? "idle" : b.status })), threads: s.threads, docs: s.docs, routines: s.routines, sessions: s.sessions, flows: s.flows, settings: s.settings }) as any,
       merge: (persisted: any, current) => {
         const p = persisted ?? {};
         const docs: BrainDoc[] = p.docs ?? current.docs;
+        const keys = { ...DEFAULT_SETTINGS.keys, ...(p.settings?.keys ?? {}) };
+        if (keys.coarena === undefined) keys.coarena = "";
         return {
           ...current, ...p,
           flows: p.flows ?? current.flows,
           docs: docs.some((d) => d.id === "k-lang") ? docs : [SEED_DOCS[0], ...docs],
-          settings: { ...DEFAULT_SETTINGS, ...(p.settings ?? {}), keys: { ...DEFAULT_SETTINGS.keys, ...(p.settings?.keys ?? {}) }, whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(p.settings?.whatsapp ?? {}) }, server: { ...DEFAULT_SETTINGS.server, ...(p.settings?.server ?? {}) } },
+          settings: { ...DEFAULT_SETTINGS, ...(p.settings ?? {}), keys, browserKey: p.settings?.browserKey ?? "", whatsapp: { ...DEFAULT_SETTINGS.whatsapp, ...(p.settings?.whatsapp ?? {}) }, server: { ...DEFAULT_SETTINGS.server, ...(p.settings?.server ?? {}) } },
         };
       },
-      migrate: (s: any, v: number) => { if (s && v < 4) { if (s.settings) s.settings.language = "en"; if (Array.isArray(s.bots)) s.bots = s.bots.map((b: any) => b.id === "grok" && b.name === "Grok" ? { ...b, name: "nSpace", title: "Chief of Staff Agent" } : b); } return s; },
+      migrate: (s: any, v: number) => {
+        if (s && v < 4) {
+          if (s.settings) s.settings.language = "en";
+          if (Array.isArray(s.bots)) s.bots = s.bots.map((b: any) => b.id === "grok" && b.name === "Grok" ? { ...b, name: "Coarena", title: "Chief of Staff Agent" } : b);
+        }
+        // v6: ship the permanent Portal Verifier agent to existing workspaces.
+        if (s && v < 6 && Array.isArray(s.bots) && !s.bots.some((b: any) => b.id === "portal")) {
+          s.bots = [...s.bots, DEFAULT_BOTS.find((b) => b.id === "portal")];
+        }
+        // v5: Coarena becomes the single default provider for every existing agent.
+        if (s && v < 5) {
+          if (Array.isArray(s.bots)) {
+            s.bots = s.bots.map((b: any) => {
+              if (!b || b.provider === "coarena") return b;
+              return { ...b, provider: "coarena", model: COARENA_DEFAULT_MODEL };
+            });
+            s.bots = s.bots.map((b: any) => (b.id === "grok" ? { ...b, id: "coarena" } : b));
+            if (s.routines) s.routines = s.routines.map((r: any) => (r.botId === "grok" ? { ...r, botId: "coarena" } : r));
+            if (s.flows) s.flows = s.flows.map((f: any) => ({ ...f, steps: (f.steps ?? []).map((st: any) => (st.botId === "grok" ? { ...st, botId: "coarena" } : st)) }));
+            if (s.threads?.grok && !s.threads.coarena) { s.threads.coarena = s.threads.grok; delete s.threads.grok; }
+            if (Array.isArray(s.sessions)) s.sessions = s.sessions.map((x: any) => (x.botId === "grok" ? { ...x, botId: "coarena" } : x));
+          }
+          if (s.settings) {
+            s.settings.keys = { ...(s.settings.keys ?? {}), coarena: s.settings.keys?.coarena || "" };
+            if (s.settings.feedback === undefined) s.settings.feedback = true;
+          }
+        }
+        return s;
+      },
     },
   ),
 );
@@ -198,16 +263,23 @@ interface Runtime {
   controllers: Record<string, AbortController>;
   browser: LiveBrowser | null; browserMin: boolean;
   approvals: Record<string, (ok: boolean) => void>;
+  /** Human Take Over: when set, the agent is paused and only the user drives the browser. */
+  takeover: { botId: string; since: number } | null;
   serverOnline: boolean;
   toast: string | null;
   drawer: boolean; rightOpen: boolean; rightTab: RightTab;
   flowRuns: Record<string, FlowRun>;
+  /** Live model list fetched from Coarena /v1/models. */
+  models: string[]; modelsLoading: boolean;
+  /** Last agent created — browser runners prefer it so a new agent is one tap away. */
+  preferredBot: string | null;
   set: (p: Partial<Runtime>) => void;
   showToast: (t: string) => void;
 }
 export const useRuntime = create<Runtime>()((set) => ({
   live: {}, controllers: {}, browser: null, browserMin: false, approvals: {}, serverOnline: false, toast: null,
   drawer: false, rightOpen: false, rightTab: "computer", flowRuns: {},
+  models: COARENA_FALLBACK_MODELS, modelsLoading: false, takeover: null, preferredBot: null,
   set: (p) => set(p),
   showToast: (t) => { set({ toast: t }); setTimeout(() => set((s) => (s.toast === t ? { toast: null } : s)), 2600); },
 }));

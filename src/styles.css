@@ -58,6 +58,9 @@ select option { color: #000; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* ---------- Liquid glass ---------- */
+/* Apple-style material: heavy blur + saturation, a specular top-left sheen,
+   a soft rim light and a deep, low-opacity shadow. Colour tokens above stay
+   the single source of truth for both light and dark. */
 .app-bg {
   background:
     radial-gradient(at 8% 12%, #cfe0ff 0, transparent 42%),
@@ -78,33 +81,80 @@ select option { color: #000; }
 .dark .blob { opacity: .35; }
 @keyframes float { 0%,100% { transform: translate(0,0) scale(1); } 33% { transform: translate(60px,-40px) scale(1.1); } 66% { transform: translate(-40px,50px) scale(.95); } }
 
-.lg-panel {
-  background: var(--glass);
-  backdrop-filter: blur(40px) saturate(190%); -webkit-backdrop-filter: blur(40px) saturate(190%);
-  border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
-}
-.lg-card {
-  background: var(--glass-strong);
-  backdrop-filter: blur(36px) saturate(180%); -webkit-backdrop-filter: blur(36px) saturate(180%);
-  border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
-}
-.lg-bar { background: color-mix(in srgb, var(--surface) 70%, transparent); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); box-shadow: inset 0 -0.5px 0 var(--sep); }
-.lg-pill {
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
-  backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+.lg-panel, .lg-card {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--glass);
+  -webkit-backdrop-filter: blur(38px) saturate(185%) brightness(1.03);
+  backdrop-filter: blur(38px) saturate(185%) brightness(1.03);
   border: 1px solid var(--glass-border);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 6px 24px rgba(0,0,0,.08);
+  box-shadow: var(--glass-shadow);
 }
-.dark .lg-pill { box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 6px 24px rgba(0,0,0,.4); }
+.lg-panel { background-color: var(--glass); }
+.lg-card { background-color: var(--glass-strong); }
+.lg-panel::before, .lg-card::before {
+  content: "";
+  position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 12% -12%, rgba(255,255,255,.62) 0%, rgba(255,255,255,0) 52%),
+    radial-gradient(90% 70% at 104% 108%, rgba(255,255,255,.22) 0%, rgba(255,255,255,0) 55%),
+    linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0) 30%);
+}
+.dark .lg-panel::before, .dark .lg-card::before {
+  background:
+    radial-gradient(120% 90% at 12% -12%, rgba(255,255,255,.12) 0%, rgba(255,255,255,0) 52%),
+    radial-gradient(90% 70% at 104% 108%, rgba(255,255,255,.05) 0%, rgba(255,255,255,0) 55%);
+}
+.lg-bar {
+  background: color-mix(in srgb, var(--surface) 68%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+  backdrop-filter: blur(28px) saturate(185%);
+  box-shadow: inset 0 -0.5px 0 var(--sep), inset 0 1px 0 rgba(255,255,255,.35);
+}
+.dark .lg-bar { box-shadow: inset 0 -0.5px 0 var(--sep), inset 0 1px 0 rgba(255,255,255,.06); }
+.lg-pill {
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 6px 24px rgba(0,0,0,.08);
+}
+.dark .lg-pill { box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 6px 24px rgba(0,0,0,.4); }
 .glass, .glass-white { background: color-mix(in srgb, var(--surface) 78%, transparent); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); }
+
+/* A moving specular sweep — apply to prominent glass buttons / cards. */
+.liquid { position: relative; overflow: hidden; isolation: isolate; }
+.liquid::after {
+  content: ""; position: absolute; inset: -60%; z-index: -1; pointer-events: none;
+  background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,.42) 50%, transparent 58%);
+  transform: translateX(-72%) rotate(.001deg);
+  transition: transform .85s cubic-bezier(.2,.8,.2,1);
+}
+.liquid:hover::after { transform: translateX(72%) rotate(.001deg); }
+.dark .liquid::after { background: linear-gradient(115deg, transparent 42%, rgba(255,255,255,.14) 50%, transparent 58%); }
+
 .hairline-b { box-shadow: inset 0 -0.5px 0 var(--sep); }
 .hairline-t { box-shadow: inset 0 0.5px 0 var(--sep); }
 .hairline-r { box-shadow: inset -0.5px 0 0 var(--sep); }
 .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 10px); }
 .pt-safe { padding-top: env(safe-area-inset-top); }
-.press { transition: transform .2s cubic-bezier(.3,.7,.4,1), opacity .2s, background-color .2s; }
-.press:active { transform: scale(.95); opacity: .85; }
+.press { transition: transform .22s cubic-bezier(.34,1.56,.64,1), opacity .2s, background-color .2s, box-shadow .25s; }
+.press:active { transform: scale(.96); opacity: .88; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* Keyboard / touch ergonomics */
+html { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+::selection { background: rgba(10,132,255,.22); }
+:focus-visible { outline: 2px solid rgba(10,132,255,.55); outline-offset: 2px; border-radius: 8px; }
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .lg-panel, .lg-card, .lg-bar, .lg-pill { background: var(--surface); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}
 
 .logo-shine { overflow: hidden; box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 6px 18px rgba(94,92,230,.4); }
 .logo-shine::after { content: ""; position: absolute; inset: -50%; background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,.55) 50%, transparent 60%); animation: shine 4.5s ease-in-out infinite; }

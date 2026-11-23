@@ -6,11 +6,12 @@ const App = lazy(() => import("@/grok/App"));
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "N Space · Grok Bot" },
-      { name: "description", content: "Multi-agent AI teammates — Grok, OpenAI, Gemini, Mistral, DeepSeek, browser, visa, legal & PDF experts." },
-      { property: "og:title", content: "N Space · Grok Bot" },
-      { property: "og:description", content: "Multi-agent AI teammates for visa, legal, research and PDF work." },
+      { title: "Coarena — AI Agent Workspace" },
+      { name: "description", content: "A real AI agent workspace — browser agents, visa & legal experts, PDF generation, automations and long-term memory. Powered by the Coarena Free Model API." },
+      { property: "og:title", content: "Coarena — AI Agent Workspace" },
+      { property: "og:description", content: "A real AI agent workspace for browsing, documents, automations and memory." },
       { property: "og:type", content: "website" },
+      { property: "og:site_name", content: "Coarena" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),

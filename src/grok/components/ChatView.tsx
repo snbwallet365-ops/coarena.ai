@@ -3,14 +3,17 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Mic, Paperclip, Square, SlidersHorizontal, X, Trash2, ChevronDown, Smartphone, Monitor, Tablet, RefreshCw, Download, Loader2, PanelRight, Sparkles } from "lucide-react";
 import { useStore, useRuntime, PROVIDERS, type Provider } from "../lib/store";
 import { runBot, stopBot } from "../lib/agent";
+import { listCoarenaModels, hasServerCoarenaKey } from "../lib/providers";
+import { prettyModel } from "../lib/coarena";
 import BotAvatar, { StatusDot } from "./BotAvatar";
 import MessageItem from "./MessageItem";
 import { Sheet, MenuButton } from "./ui";
 import { cn } from "../utils/cn";
 
 const SUGGEST_EN: Record<string, string[]> = {
-  grok: ["Build a UK visitor visa document checklist for a Bangladeshi applicant", "My Schengen visa was refused — analyse the reasons and plan a reapplication", "Prepare me for a US B1/B2 embassy interview with 10 likely questions", "Create a Canada visitor visa cover letter as a PDF"],
+  coarena: ["Build a UK visitor visa document checklist for a Bangladeshi applicant", "My Schengen visa was refused — analyse the reasons and plan a reapplication", "Prepare me for a US B1/B2 embassy interview with 10 likely questions", "Create a Canada visitor visa cover letter as a PDF"],
   browser: ["Go to news.ycombinator.com and list the top 5 stories", "Search for the best rated laptop under $1000 in 2026", "Open github.com/trending and summarise the top repos", "Find the official Schengen visa fee today"],
+  portal: ["Check the status of my UK visa application on the visa portal and summarise it", "Verify the document checklist for a Schengen appointment on the VFS portal", "Open the visa portal, pause at the terms page, then prepare a PDF status report", "Confirm what is still missing for my US B1/B2 DS-160 before submission"],
   visa: ["My UK visit visa was refused under V4.2(a) and (c). What should I do?", "Analyse my US B1/B2 214(b) refusal and build a reapplication plan", "Schengen tourist visa checklist for a self-employed applicant", "Write a cover letter for a Canada visitor visa reapplication"],
   legal: ["Draft a mutual NDA between two companies", "Create a freelance service agreement with milestones", "Write a sponsorship invitation letter for a visitor visa", "Generate an affidavit of support template"],
   pdf: ["Create a professional CV PDF for a senior React developer", "Make an invoice PDF for 3 web design services", "Generate a 7-day Japan travel itinerary as PDF", "Produce a project proposal PDF for a mobile app"],
@@ -18,7 +21,7 @@ const SUGGEST_EN: Record<string, string[]> = {
   default: ["What visa services can you help my agency with?", "Search the web for today's top headlines", "Summarise a topic in 5 bullets", "Create a PDF report about renewable energy"],
 };
 const SUGGEST_BN: Record<string, string[]> = {
-  grok: ["আমার এই সপ্তাহের কাজের পরিকল্পনা করে শীর্ষ ৫টি অগ্রাধিকার দাও", "আজকের এআই এজেন্ট খবর খুঁজে সূত্রসহ সারাংশ দাও", "ভিসা এক্সপার্টকে জিজ্ঞেস করো UK ভিজিট ভিসায় কী কী কাগজ লাগে", "মনে রাখো: আমি সংক্ষিপ্ত বুলেট পয়েন্টে উত্তর পছন্দ করি"],
+  coarena: ["আমার এই সপ্তাহের কাজের পরিকল্পনা করে শীর্ষ ৫টি অগ্রাধিকার দাও", "আজকের এআই এজেন্ট খবর খুঁজে সূত্রসহ সারাংশ দাও", "ভিসা এক্সপার্টকে জিজ্ঞেস করো UK ভিজিট ভিসায় কী কী কাগজ লাগে", "মনে রাখো: আমি সংক্ষিপ্ত বুলেট পয়েন্টে উত্তর পছন্দ করি"],
   browser: ["news.ycombinator.com এ গিয়ে শীর্ষ ৫টি খবর বলো", "২০২৬ সালে $১০০০ এর নিচে সেরা ল্যাপটপ খুঁজে দাও", "github.com/trending খুলে শীর্ষ রিপোগুলোর সারাংশ দাও", "আজকের শেনজেন ভিসা ফি অফিসিয়াল সূত্র থেকে খুঁজে দাও"],
   visa: ["আমার UK ভিজিট ভিসা V4.2(a) ও (c) কারণে রিজেক্ট হয়েছে, এখন কী করব?", "আমার US B1/B2 ভিসা 214(b) তে রিফিউজ হয়েছে — পুনরায় আবেদনের পূর্ণ পরিকল্পনা দাও", "সেলফ-এমপ্লয়েড আবেদনকারীর জন্য শেনজেন ট্যুরিস্ট ভিসার চেকলিস্ট", "কানাডা ভিজিটর ভিসা পুনঃআবেদনের কভার লেটার লিখে দাও"],
   legal: ["দুই কোম্পানির মধ্যে একটি মিউচুয়াল NDA তৈরি করো", "মাইলস্টোনসহ ফ্রিল্যান্স সার্ভিস চুক্তি তৈরি করো", "ভিজিট ভিসার জন্য স্পনসরশিপ ইনভাইটেশন লেটার লেখো", "অ্যাফিডেভিট অফ সাপোর্ট টেমপ্লেট বানাও"],
@@ -44,6 +47,10 @@ export default function ChatView({ botId, onEdit, onOpenKeys }: { botId: string;
   const [preview, setPreview] = useState<string | null>(null);
   const [device, setDevice] = useState<"phone" | "tablet" | "desktop">("desktop");
   const [modelOpen, setModelOpen] = useState(false);
+  const [customModel, setCustomModel] = useState("");
+  const models = useRuntime((s) => s.models);
+  const modelsLoading = useRuntime((s) => s.modelsLoading);
+  const setRTModels = useRuntime((s) => s.set);
   const [pKey, setPKey] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -60,7 +67,9 @@ export default function ChatView({ botId, onEdit, onOpenKeys }: { botId: string;
 
   if (!bot) return null;
   const busy = !!liveId;
-  const hasKey = !!keys[bot.provider];
+  const [serverKey, setServerKey] = useState(false);
+  useEffect(() => { let on = true; hasServerCoarenaKey().then((r) => on && setServerKey(r)); return () => { on = false; }; }, []);
+  const hasKey = !!keys[bot.provider] || (bot.provider === "coarena" && serverKey);
   const liveMsg = busy ? thread.find((m) => m.id === liveId) : null;
   const liveStep = liveMsg?.steps?.slice().reverse().find((s) => s.status === "running" || s.status === "approval");
   const liveLabel = liveStep ? liveStep.label : liveMsg?.content ? (lang === "bn" ? "উত্তর লিখছে…" : "Writing response…") : (lang === "bn" ? "ভাবছে…" : "Thinking…");
@@ -127,7 +136,7 @@ export default function ChatView({ botId, onEdit, onOpenKeys }: { botId: string;
           </button>
           <div className="flex-1" />
           <button onClick={() => setModelOpen(true)} className="press lg-pill hidden h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium lg:flex">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: hasKey ? "#34c759" : "#ff9500" }} />{bot.agentId ? "Mistral Agent" : bot.model}<ChevronDown size={12} />
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: hasKey ? "#34c759" : "#ff9500" }} />{bot.agentId ? "Mistral Agent" : prettyModel(bot.model)}<ChevronDown size={12} />
           </button>
           <button onClick={() => { if (confirm(`Clear chat with ${bot.name}?`)) clearThread(botId); }} title="Clear chat" className="press flex h-9 w-9 items-center justify-center rounded-full text-label2 hover:bg-fill"><Trash2 size={17} /></button>
           <button onClick={onEdit} title="Agent settings" className="press flex h-9 w-9 items-center justify-center rounded-full text-label2 hover:bg-fill"><SlidersHorizontal size={17} /></button>
@@ -146,7 +155,8 @@ export default function ChatView({ botId, onEdit, onOpenKeys }: { botId: string;
             <div className="fade-up flex min-h-[55vh] flex-col items-center justify-center text-center">
               <div className="relative"><div className="absolute inset-0 scale-150 rounded-full blur-2xl" style={{ background: bot.color, opacity: 0.25 }} /><BotAvatar shape={bot.shape} color={bot.color} status={bot.status} size={92} /></div>
               <div className="mt-5 text-[28px] font-bold tracking-tight">{bot.name}</div>
-              <div className="mt-1 max-w-sm text-[15px] text-label2">{bot.title} · {PROVIDERS[bot.provider].label}{bot.agentId ? " Agent" : ` · ${bot.model}`}</div>
+              <div className="mt-1 max-w-sm text-[15px] text-label2">{bot.title} · {PROVIDERS[bot.provider].label}{bot.agentId ? " Agent" : ""}</div>
+              {!bot.agentId && <div className="mt-0.5 text-[12.5px] text-label3">{bot.model}</div>}
               {!hasKey && <button onClick={onOpenKeys} className="press mt-4 rounded-full bg-[#ff9500]/15 px-4 py-2 text-[14px] font-semibold text-[#ff9500]">Add {PROVIDERS[bot.provider].label} API key to start →</button>}
               <div className="mt-8 grid w-full max-w-[640px] grid-cols-1 gap-2.5 sm:grid-cols-2">
                 {sugg.map((s, i) => (
@@ -207,7 +217,7 @@ export default function ChatView({ botId, onEdit, onOpenKeys }: { botId: string;
               <input ref={fileRef} type="file" multiple hidden onChange={(e) => { onFiles(e.target.files); e.target.value = ""; }} />
               <button onClick={() => setModelOpen(true)} className="press flex h-8 min-w-0 items-center gap-1.5 rounded-full bg-fill px-2.5 text-[12.5px] font-medium text-label">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: hasKey ? "#34c759" : "#ff9500" }} />
-                <span className="truncate">{PROVIDERS[bot.provider].label.replace(" · xAI", "")} · {bot.agentId ? "Agent" : bot.model}</span><ChevronDown size={12} className="shrink-0" />
+                <span className="truncate">{PROVIDERS[bot.provider].label.replace(" · xAI", "")} · {bot.agentId ? "Agent" : prettyModel(bot.model)}</span><ChevronDown size={12} className="shrink-0" />
               </button>
               <div className="flex-1" />
               <button onClick={toggleMic} title="Voice" className={cn("press flex h-9 w-9 items-center justify-center rounded-full", listening ? "bg-[#ff3b30] text-white" : "text-label2 hover:bg-fill")}><Mic size={18} /></button>
@@ -218,25 +228,48 @@ export default function ChatView({ botId, onEdit, onOpenKeys }: { botId: string;
               )}
             </div>
           </div>
-          <div className="mt-1.5 pb-0.5 text-center text-[11px] text-label3">N Space · {bot.name} {lang === "bn" ? "বাংলায় উত্তর দেবে" : "may make mistakes — verify important info"}</div>
+          <div className="mt-1.5 pb-0.5 text-center text-[11px] text-label3">Coarena · {bot.name} {lang === "bn" ? "বাংলায় উত্তর দেবে" : "may make mistakes — verify important info"}</div>
         </div>
       </div>
 
       {/* Model switcher */}
       <Sheet open={modelOpen} onClose={() => setModelOpen(false)} title="Model">
         <div className="p-4">
-          {(Object.keys(PROVIDERS) as Provider[]).map((p) => (
-            <div key={p} className="mb-4">
-              <div className="mb-1.5 flex items-center gap-2 px-2 text-[13px] uppercase text-label2">{PROVIDERS[p].label}{!keys[p] && <span className="normal-case text-[#ff9500]">· no key</span>}</div>
-              <div className="overflow-hidden rounded-[14px] bg-surface">
-                {PROVIDERS[p].models.map((m) => (
-                  <button key={m} onClick={() => { updateBot(botId, { provider: p, model: m }); setModelOpen(false); }} className="flex w-full items-center justify-between px-4 py-2.5 text-left text-[15px] shadow-[inset_0_-0.5px_0_var(--sep)] last:shadow-none active:bg-fill">
-                    {m}{bot.provider === p && bot.model === m && <span className="text-[#007aff]">✓</span>}
-                  </button>
-                ))}
+          {(Object.keys(PROVIDERS) as Provider[]).map((p) => {
+            const list = p === "coarena" ? (models.length ? models : PROVIDERS[p].models) : PROVIDERS[p].models;
+            return (
+              <div key={p} className="mb-4">
+                <div className="mb-1.5 flex items-center gap-2 px-2 text-[13px] uppercase text-label2">
+                  {PROVIDERS[p].label}
+                  {p === "coarena" && <span className="rounded-full bg-[#0a84ff]/12 px-1.5 py-px text-[10px] font-bold normal-case tracking-wide text-[#0a84ff]">DEFAULT</span>}
+                  {!keys[p] && !(p === "coarena" && serverKey) && <span className="normal-case text-[#ff9500]">· no key</span>}
+                  {p === "coarena" && !keys[p] && serverKey && <span className="normal-case text-[#34c759]">· workspace key</span>}
+                  {p === "coarena" && (
+                    <button onClick={async () => { setRTModels({ modelsLoading: true }); const m = await listCoarenaModels(keys.coarena); setRTModels({ models: m, modelsLoading: false }); showToast(m.length > 1 ? `${m.length} models loaded` : "Using the built-in model list"); }}
+                      className="ml-auto flex items-center gap-1 normal-case text-[#007aff] disabled:opacity-40" disabled={modelsLoading}>
+                      <RefreshCw size={12} className={modelsLoading ? "animate-spin" : ""} />{modelsLoading ? "Loading" : "Refresh"}
+                    </button>
+                  )}
+                </div>
+                <div className="overflow-hidden rounded-[14px] bg-surface">
+                  {list.map((m) => (
+                    <button key={m} onClick={() => { updateBot(botId, { provider: p, model: m }); setModelOpen(false); }} className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-[15px] shadow-[inset_0_-0.5px_0_var(--sep)] last:shadow-none active:bg-fill">
+                      <span className="truncate">{m}</span>
+                      {bot.provider === p && bot.model === m && <span className="shrink-0 text-[#007aff]">✓</span>}
+                    </button>
+                  ))}
+                </div>
+                {p === "coarena" && (
+                  <form onSubmit={(e) => { e.preventDefault(); if (customModel.trim()) { updateBot(botId, { provider: "coarena", model: customModel.trim() }); setCustomModel(""); setModelOpen(false); } }}
+                    className="mt-2 flex items-center gap-2 rounded-[12px] bg-fill px-3">
+                    <span className="shrink-0 text-[12px] text-label2">Custom</span>
+                    <input value={customModel} onChange={(e) => setCustomModel(e.target.value)} placeholder="model id from /v1/models" className="h-10 w-full bg-transparent text-[14px] outline-none placeholder:text-label3" />
+                    <button className="shrink-0 text-[13px] font-semibold text-[#007aff]">Use</button>
+                  </form>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Sheet>
 
