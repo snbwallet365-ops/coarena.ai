@@ -1,23 +1,28 @@
 {
-  "name": "N Space — Grok Bot AI Teammates",
-  "short_name": "N Space",
-  "description": "Multi-agent AI teammates: Grok, OpenAI, Gemini, Mistral, DeepSeek, browser-use, visa, legal & PDF experts.",
+  "name": "Coarena — AI Agent Workspace",
+  "short_name": "Coarena",
+  "description": "A real AI agent workspace: chat with agents that browse the web, build documents, run automations and remember what matters. Powered by the Coarena Free Model API.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#f2f2f7",
-  "theme_color": "#f9f9fb",
+  "background_color": "#eef1f8",
+  "theme_color": "#eef1f8",
   "categories": ["productivity", "business", "utilities"],
+  "prefer_related_applications": false,
+  "launch_handler": { "client_mode": "focus-existing" },
   "icons": [
-    { "src": "/icon-512.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Browser", "url": "/?section=browser", "icons": [{ "src": "/icon-512.png", "sizes": "512x512" }] },
-    { "name": "Brain", "url": "/?section=brain", "icons": [{ "src": "/icon-512.png", "sizes": "512x512" }] }
+    { "name": "New Agent", "short_name": "New Agent", "url": "/?section=agents", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Computer & Browser", "short_name": "Browser", "url": "/?section=browser", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Brain", "short_name": "Brain", "url": "/?section=brain", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Automations", "short_name": "Automations", "url": "/?section=automations", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
   ]
 }

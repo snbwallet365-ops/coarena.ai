@@ -1,9 +1,9 @@
 // @ts-nocheck
 import { useEffect, useState } from "react";
-import { Globe, Play, Plus, Clock, ExternalLink, Server, CheckCircle2, XCircle, Loader2, Copy, MessageCircle, KeyRound, Download, Upload, Bell, ShieldCheck, Gauge, Thermometer, User, Smartphone, RotateCcw, Eye, EyeOff, Terminal } from "lucide-react";
+import { Globe, Play, Plus, Clock, ExternalLink, Server, CheckCircle2, XCircle, Loader2, Copy, MessageCircle, KeyRound, Download, Upload, Bell, ShieldCheck, Gauge, Thermometer, User, Smartphone, RotateCcw, Eye, EyeOff, Terminal, Sparkles, RefreshCw, Zap, Check, ThumbsUp, ThumbsDown, PanelRightOpen } from "lucide-react";
 import { useStore, useRuntime, PROVIDERS, type Provider, type Routine } from "../lib/store";
+import { listCoarenaModels, testKey } from "../lib/providers";
 import { checkServer, quickBrowse, runBot } from "../lib/agent";
-import { testKey } from "../lib/providers";
 import BotAvatar from "./BotAvatar";
 import { LargeTitle, Group, Row, Toggle, Sheet, Field, inputCls, Pill, Segmented } from "./ui";
 import { LiveScreen } from "./ComputerPanel";
@@ -51,7 +51,14 @@ export function BrowserView({ onOpenBot }: { onOpenBot: (id: string) => void }) 
 
   return (
     <div className="h-full overflow-y-auto pb-10">
-      <LargeTitle title="Computer & Browser" sub="Watch Agents browse in real time — click the screen to take control (local server)." />
+      <LargeTitle title="Computer & Browser" sub="Watch agents browse in real time — click the screen to take control. On wide screens it opens beside the chat." />
+      <div className="mx-4 mb-3 flex flex-wrap items-center gap-2 md:mx-7">
+        <button onClick={() => { onOpenBot(botId || "browser"); useRuntime.getState().set({ rightOpen: true, rightTab: "computer" }); }}
+          className="press lg-pill flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-semibold text-[#007aff]">
+          <PanelRightOpen size={15} /> Open beside chat
+        </button>
+        <span className="text-[12px] text-label2">Split view · drag the divider to resize</span>
+      </div>
       <div className="mx-4 mb-6 md:mx-7"><LiveScreen interactive /></div>
       <ServerCard />
 
@@ -95,7 +102,7 @@ export function BrowserView({ onOpenBot }: { onOpenBot: (id: string) => void }) 
             </button>
           );
         })}
-        {sessions.length === 0 && <div className="col-span-full rounded-[18px] bg-surface py-12 text-center text-[15px] text-label2">No pages yet — ask a Agent to browse something.</div>}
+        {sessions.length === 0 && <div className="col-span-full rounded-[18px] bg-surface py-12 text-center text-[15px] text-label2">No pages yet — ask an Agent to browse something.</div>}
       </div>
     </div>
   );
@@ -185,6 +192,89 @@ function KeyRow({ p }: { p: Provider }) {
   );
 }
 
+// ---------------- Coarena ----------------
+function CoarenaCard() {
+  const key = useStore((s) => s.settings.keys.coarena);
+  const settings = useStore((s) => s.settings);
+  const setSettings = useStore((s) => s.setSettings);
+  const bots = useStore((s) => s.bots);
+  const updateBot = useStore((s) => s.updateBot);
+  const models = useRuntime((s) => s.models);
+  const loading = useRuntime((s) => s.modelsLoading);
+  const set = useRuntime((s) => s.set);
+  const toast = useRuntime((s) => s.showToast);
+  const [show, setShow] = useState(false);
+  const [state, setState] = useState<"idle" | "testing" | "ok" | "fail">("idle");
+  const coarenaBots = bots.filter((b) => b.provider === "coarena").length;
+
+  const refresh = async () => {
+    set({ modelsLoading: true });
+    const m = await listCoarenaModels(key);
+    set({ models: m, modelsLoading: false });
+    toast(m.length > 1 ? `${m.length} models loaded from Coarena` : "Using the built-in model list");
+  };
+  const test = async () => {
+    setState("testing");
+    try { await testKey("coarena", key, settings.server.useProxy ? settings.server.url : null); setState("ok"); toast("Coarena connected · key is valid"); }
+    catch (e: any) { setState("fail"); toast(String(e?.message ?? e).slice(0, 120)); }
+  };
+  const makeDefault = () => {
+    bots.filter((b) => b.provider !== "coarena").forEach((b) => updateBot(b.id, { provider: "coarena", model: models[0] ?? b.model }));
+    toast("Every agent now uses Coarena");
+  };
+
+  return (
+    <div className="relative mb-7 overflow-hidden rounded-[26px] p-[1px]" style={{ background: "linear-gradient(135deg,rgba(10,132,255,.55),rgba(94,92,230,.45),rgba(191,90,242,.35))" }}>
+      <div className="relative overflow-hidden rounded-[25px] bg-[var(--surface)] p-5">
+        <div className="pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-[#0a84ff]/15 blur-3xl" />
+        <div className="relative flex items-start gap-3">
+          <span className="logo-shine flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] text-[22px] font-black text-white"
+            style={{ background: "linear-gradient(135deg,#0a84ff 0%,#5e5ce6 55%,#bf5af2 100%)" }}>C</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[18px] font-bold tracking-tight">Coarena Free Model API</span>
+              <span className="rounded-full bg-[#0a84ff]/12 px-2 py-px text-[10.5px] font-bold uppercase tracking-wide text-[#0a84ff]">Default provider</span>
+            </div>
+            <div className="mt-0.5 text-[13px] text-label2">One key powers every agent · OpenAI-compatible · {coarenaBots} agent{coarenaBots === 1 ? "" : "s"} connected</div>
+          </div>
+          <span className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold", key ? "bg-[#34c759]/12 text-[#34c759]" : "bg-[#ff9500]/12 text-[#ff9500]")}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", key ? "bg-[#34c759]" : "bg-[#ff9500]")} />{key ? "Live" : "Add key"}
+          </span>
+        </div>
+
+        <div className="relative mt-4 flex items-center gap-2 rounded-[12px] bg-grouped px-3">
+          <KeyRound size={14} className="shrink-0 text-label2" />
+          <input type={show ? "text" : "password"} value={key} autoComplete="off" spellCheck={false} placeholder="coa_…"
+            onChange={(e) => { setState("idle"); setSettings((s) => ({ ...s, keys: { ...s.keys, coarena: e.target.value.trim() } })); }}
+            className="h-10 w-full bg-transparent font-mono text-[13.5px] outline-none placeholder:text-label3" />
+          <button onClick={() => setShow(!show)} className="text-label2">{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+          <button disabled={!key || state === "testing"} onClick={test} className="press shrink-0 rounded-full bg-surface px-3 py-1 text-[12.5px] font-semibold text-[#007aff] shadow-sm disabled:opacity-40">
+            {state === "testing" ? <Loader2 size={13} className="animate-spin" /> : state === "ok" ? <Check size={13} /> : "Test"}
+          </button>
+        </div>
+
+        <div className="relative mt-3 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11.5px] font-semibold uppercase tracking-wide text-label2">Models</span>
+          {models.slice(0, 5).map((m) => (
+            <button key={m} onClick={() => toast(`${m} · set per agent in chat`)} className="press rounded-full bg-fill px-2.5 py-1 text-[11.5px] font-medium text-label2 hover:text-label">{m}</button>
+          ))}
+          <button onClick={refresh} disabled={loading} className="press ml-auto flex items-center gap-1 rounded-full bg-[#007aff]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[#007aff] disabled:opacity-40">
+            <RefreshCw size={11} className={loading ? "animate-spin" : ""} />{loading ? "Loading" : "Refresh"}
+          </button>
+        </div>
+
+        <div className="relative mt-3 flex flex-wrap items-center gap-2 border-t border-sep pt-3">
+          <button onClick={makeDefault} disabled={coarenaBots === bots.length}
+            className="press flex items-center gap-1.5 rounded-full bg-[#007aff] px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow-[0_4px_14px_rgba(0,122,255,.3)] disabled:opacity-40 disabled:shadow-none">
+            <Zap size={12} fill="currentColor" />{coarenaBots === bots.length ? "All agents on Coarena" : "Use Coarena for every agent"}
+          </button>
+          <span className="text-[11.5px] text-label2">Models are fetched live from /v1/models</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ConnectionsView() {
   const settings = useStore((s) => s.settings);
   const setSettings = useStore((s) => s.setSettings);
@@ -197,6 +287,7 @@ export function ConnectionsView() {
     <div className="h-full overflow-y-auto pb-10">
       <LargeTitle title="Connections" sub="Keys are stored only on this device and sent directly to each provider." />
       <div className="px-4 md:px-7">
+        <CoarenaCard />
         <SetupStatus onFix={() => document.getElementById("ai-keys")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
         <div className="mb-7 flex items-center gap-4 rounded-[20px] bg-surface p-4 shadow-[0_1px_2px_rgba(0,0,0,.04)]">
           <span className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-[#25d366] text-white"><MessageCircle size={26} fill="white" /></span>
@@ -208,8 +299,8 @@ export function ConnectionsView() {
         </div>
 
         <div id="ai-keys" />
-        <Group header="AI providers · real-time API keys">
-          {(Object.keys(PROVIDERS) as Provider[]).map((p) => <KeyRow key={p} p={p} />)}
+        <Group header="Other providers · bring your own key" footer="Coarena is already connected above. Add another provider only if you want a specific agent to use it.">
+          {(Object.keys(PROVIDERS) as Provider[]).filter((p) => p !== "coarena").map((p) => <KeyRow key={p} p={p} />)}
         </Group>
       </div>
 
@@ -231,7 +322,7 @@ export function ConnectionsView() {
           <Group header="Your number" footer="Include country code, e.g. 447700900123">
             <Field label="Phone"><input value={wa.phone} onChange={(e) => setWa({ phone: e.target.value.replace(/[^\d]/g, "") })} inputMode="tel" placeholder="Country code + number" className={inputCls} /></Field>
           </Group>
-          <button disabled={wa.phone.length < 8} onClick={() => { setWa({ connected: true }); window.open(`https://wa.me/${wa.phone}?text=${encodeURIComponent("✅ nSpace Agent is connected to this WhatsApp.")}`, "_blank"); toast("WhatsApp connected"); }}
+          <button disabled={wa.phone.length < 8} onClick={() => { setWa({ connected: true }); window.open(`https://wa.me/${wa.phone}?text=${encodeURIComponent("✅ Coarena Agent is connected to this WhatsApp.")}`, "_blank"); toast("WhatsApp connected"); }}
             className="press mb-7 w-full rounded-[14px] bg-[#25d366] py-3.5 text-[17px] font-semibold text-white disabled:opacity-40">One-tap connect & send test</button>
           <Group header="Optional · WhatsApp Cloud API" footer="For fully automatic sending (no tap), add a Meta WhatsApp Cloud API token and Phone Number ID from developers.facebook.com.">
             <Field label="Token"><input type="password" value={wa.token} onChange={(e) => setWa({ token: e.target.value.trim() })} placeholder="EAAG…" className={inputCls} /></Field>
@@ -249,6 +340,7 @@ export function SettingsView() {
   const settings = useStore((s) => s.settings);
   const setSettings = useStore((s) => s.setSettings);
   const toast = useRuntime((s) => s.showToast);
+  const models = useRuntime((s) => s.models);
   const [installEvt, setInstallEvt] = useState<any>((window as any).__installPrompt ?? null);
   const standalone = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as any).standalone;
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -260,8 +352,8 @@ export function SettingsView() {
 
   const exportData = () => {
     const s = useStore.getState();
-    const data = JSON.stringify({ bots: s.bots, threads: s.threads, docs: s.docs, routines: s.routines, settings: { ...s.settings, keys: { xai: "", openai: "", deepseek: "", mistral: "", gemini: "" } } }, null, 2);
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type: "application/json" })); a.download = `grokbot-backup-${Date.now()}.json`; a.click();
+    const data = JSON.stringify({ bots: s.bots, threads: s.threads, docs: s.docs, routines: s.routines, settings: { ...s.settings, keys: { coarena: "", xai: "", openai: "", deepseek: "", mistral: "", gemini: "" } } }, null, 2);
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type: "application/json" })); a.download = `coarena-backup-${Date.now()}.json`; a.click();
   };
   const importData = () => {
     const i = document.createElement("input"); i.type = "file"; i.accept = "application/json";
@@ -274,8 +366,25 @@ export function SettingsView() {
     <div className="h-full overflow-y-auto pb-10">
       <LargeTitle title="Settings" />
       <div className="px-4 md:px-7">
+        <div className="mb-7 flex items-center gap-3 rounded-[22px] bg-surface p-4 shadow-[0_1px_2px_rgba(0,0,0,.04)]">
+          <span className="flex h-14 w-14 items-center justify-center rounded-[18px] text-[22px] font-black text-white"
+            style={{ background: "linear-gradient(135deg,#0a84ff 0%,#5e5ce6 55%,#bf5af2 100%)" }}>{(settings.userName || "Y").trim()[0]?.toUpperCase() ?? "Y"}</span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[18px] font-bold tracking-tight">{settings.userName || "You"}</div>
+            <div className="truncate text-[13px] text-label2">Coarena workspace · Free plan · this device</div>
+          </div>
+          <span className="flex items-center gap-1.5 rounded-full bg-[#34c759]/12 px-2.5 py-1 text-[12px] font-semibold text-[#34c759]"><span className="h-1.5 w-1.5 rounded-full bg-[#34c759]" />Active</span>
+        </div>
+
         <Group>
           <Field label="Your name"><input value={settings.userName} onChange={(e) => set({ userName: e.target.value })} className={inputCls} /></Field>
+        </Group>
+
+        <Group header="Coarena Free Model API" footer="One key powers every agent. Models load live from /v1/models; you can override the model per agent from the chat header.">
+          <Row icon={<KeyRound size={17} />} iconBg="#0a84ff" title={settings.keys.coarena ? "API key connected" : "Add your Coarena key"} subtitle={settings.keys.coarena ? `${settings.keys.coarena.slice(0, 6)}…${settings.keys.coarena.slice(-4)} · one key for all agents` : "coa_… · stored on this device"}
+            right={<a href="#/connections" onClick={(e) => { e.preventDefault(); useRuntime.getState().set({ drawer: false }); window.dispatchEvent(new CustomEvent("coarena:navigate", { detail: "connections" })); }} className="rounded-full bg-[#007aff] px-3 py-1.5 text-[13px] font-semibold text-white">Manage</a>} />
+          <Row icon={<Sparkles size={17} />} iconBg="#5e5ce6" title="Model catalogue" subtitle={`${models.length} model${models.length === 1 ? "" : "s"} available · ${models[0] ?? "—"}`}
+            onClick={async () => { useRuntime.getState().set({ modelsLoading: true }); const m = await listCoarenaModels(settings.keys.coarena); useRuntime.getState().set({ models: m, modelsLoading: false }); toast(`${m.length} models loaded`); }} chevron />
         </Group>
 
         <Group header="Appearance & language" footer="Agents always reply in the selected language — the Brain remembers this permanently. Long questions get long, detailed answers.">
@@ -291,7 +400,8 @@ export function SettingsView() {
 
         <Group header="Behaviour">
           <Row icon={<ShieldCheck size={17} />} iconBg="#34c759" title="Ask before actions" subtitle="Clicks, typing & WhatsApp sends" right={<Toggle on={settings.approvals} onChange={(v) => set({ approvals: v })} />} />
-          <Row icon={<Bell size={17} />} iconBg="#ff3b30" title="Notifications" subtitle="When a Agent finishes in background" right={<Toggle on={settings.notifications} onChange={async (v) => {
+          <Row icon={<ThumbsUp size={17} />} iconBg="#0a84ff" title="Send reply ratings" subtitle="Thumbs up/down go to Coarena /v1/feedback" right={<Toggle on={settings.feedback} onChange={(v) => set({ feedback: v })} />} />
+          <Row icon={<Bell size={17} />} iconBg="#ff3b30" title="Notifications" subtitle="When an Agent finishes in background" right={<Toggle on={settings.notifications} onChange={async (v) => {
             if (v && typeof Notification !== "undefined") { const p = await Notification.requestPermission(); if (p !== "granted") { toast("Notifications blocked by browser"); return; } }
             set({ notifications: v });
           }} />} />
@@ -315,7 +425,7 @@ export function SettingsView() {
         </Group>
 
         <div className="flex flex-col items-center gap-1 pb-6 text-[12px] text-label3">
-          <User size={14} /> N Space · Grok Bot · v3.0
+          <Sparkles size={13} /> Coarena · AI agent workspace · v1.0
         </div>
       </div>
     </div>

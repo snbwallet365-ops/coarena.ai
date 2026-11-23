@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from "react";
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
+import { Sparkles } from "lucide-react";
 import { useStore, useRuntime } from "./lib/store";
 import { checkServer, runBot } from "./lib/agent";
 import { runFlow } from "./lib/flows";
@@ -49,13 +51,26 @@ export default function App() {
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#060608" : "#eef1f8");
   }, [theme]);
 
-  // Auto-open the computer panel when the active bot starts using the browser (once per turn)
+  // Document title follows the active surface
+  useEffect(() => {
+    const label = section === "agents" ? (bots.find((b) => b.id === activeId)?.name ?? "Agents") : NAV.find((n) => n.id === section)?.label ?? "Workspace";
+    document.title = `${label} · Coarena`;
+  }, [section, activeId, bots]);
+
+  // Auto-open the computer panel when the active agent starts using the browser (once per turn)
   useEffect(() => {
     const turn = activeId ? live[activeId] : null;
     if (browser && turn && browser.botId === activeId && autoTurn.current !== turn && wide) {
       autoTurn.current = turn; setRT({ rightOpen: true, rightTab: "computer" });
     }
   }, [browser?.url, browser?.botId, activeId, live, wide]);
+
+  // Cross-surface navigation (e.g. Settings → Connections)
+  useEffect(() => {
+    const h = (e: Event) => { const s = (e as CustomEvent).detail as Section | undefined; if (s && (s === "agents" || NAV.some((n) => n.id === s))) { setSection(s); setRT({ drawer: false }); } };
+    window.addEventListener("coarena:navigate", h);
+    return () => window.removeEventListener("coarena:navigate", h);
+  }, []);
 
   // Local server health
   useEffect(() => { checkServer(); const t = setInterval(checkServer, 15000); return () => clearInterval(t); }, []);
@@ -83,7 +98,7 @@ export default function App() {
     const k = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
       if (e.key === "b") { e.preventDefault(); setCollapsed((c) => !c); }
-      if (e.key === "." ) { e.preventDefault(); setRT({ rightOpen: !useRuntime.getState().rightOpen }); }
+      if (e.key === ".") { e.preventDefault(); setRT({ rightOpen: !useRuntime.getState().rightOpen }); }
       if (e.key === "j") { e.preventDefault(); useStore.getState().setSettings((s) => ({ ...s, theme: s.theme === "dark" ? "light" : "dark" })); }
     };
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
@@ -106,9 +121,24 @@ export default function App() {
       case "routines": return <RoutinesView />;
       case "connections": return <ConnectionsView />;
       case "settings": return <SettingsView />;
-      default: return activeId ? <ChatView key={activeId} botId={activeId} onEdit={() => setEditor({ open: true, id: activeId })} onOpenKeys={openKeys} /> : null;
+      default:
+        if (!activeId) return (
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-[20px] bg-[#007aff]/12 text-[#007aff]"><Sparkles size={30} /></div>
+            <div className="text-[20px] font-bold">Create your first agent</div>
+            <div className="max-w-sm text-[14.5px] text-label2">Give it a job, a model and a set of tools — then talk to it like a teammate.</div>
+            <button onClick={() => setEditor({ open: true, id: null })} className="press mt-1 rounded-full bg-[#007aff] px-5 py-2.5 text-[15px] font-semibold text-white">New Agent</button>
+          </div>
+        );
+        return <ChatView key={activeId} botId={activeId} onEdit={() => setEditor({ open: true, id: activeId })} onOpenKeys={openKeys} />;
     }
   };
+
+  const main = (
+    <main key={section === "agents" ? "agents" : section} className="lg-card fade-in relative z-10 flex h-full min-w-0 flex-1 flex-col overflow-hidden md:rounded-[26px]">
+      {content()}
+    </main>
+  );
 
   return (
     <div className="app-bg relative flex h-dvh w-full overflow-hidden md:gap-2.5 md:p-2.5">
@@ -126,26 +156,37 @@ export default function App() {
         </div>
       )}
 
-      <main key={section === "agents" ? "agents" : section} className="lg-card fade-in relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden md:rounded-[26px]">
-        {content()}
-      </main>
-
-      {showRight && activeId && (xl ? (
-        <div className="slide-right relative z-10 h-full w-[400px] shrink-0 2xl:w-[460px]">
-          <ComputerPanel botId={activeId} onClose={() => setRT({ rightOpen: false })} />
-        </div>
+      {showRight && xl ? (
+        <PanelGroup orientation="horizontal" className="relative z-10 min-w-0 flex-1 gap-2.5">
+          <Panel id="chat" defaultSize="64%" minSize="34%" className="min-w-0">
+            {main}
+          </Panel>
+          <PanelResizeHandle className="group relative w-2 shrink-0 rounded-full transition-colors hover:bg-[#007aff]/20">
+            <span className="absolute left-1/2 top-1/2 h-12 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sep transition-all group-hover:h-20 group-hover:bg-[#007aff]/70" />
+          </PanelResizeHandle>
+          <Panel id="computer" defaultSize="36%" minSize="24%" maxSize="60%" className="min-w-0">
+            <div className="h-full">
+              <ComputerPanel botId={activeId!} onClose={() => setRT({ rightOpen: false })} />
+            </div>
+          </Panel>
+        </PanelGroup>
       ) : (
-        <div className="fixed inset-0 z-[56]">
-          <div className="fade-in absolute inset-0 bg-black/25 backdrop-blur-[2px]" onClick={() => setRT({ rightOpen: false })} />
-          <div className="slide-right absolute inset-y-0 right-0 w-full max-w-[440px] md:inset-y-2.5 md:right-2.5">
-            <ComputerPanel botId={activeId} onClose={() => setRT({ rightOpen: false })} />
-          </div>
-        </div>
-      ))}
+        <>
+          {main}
+          {showRight && activeId && (
+            <div className="fixed inset-0 z-[56]">
+              <div className="fade-in absolute inset-0 bg-black/25 backdrop-blur-[2px]" onClick={() => setRT({ rightOpen: false })} />
+              <div className="slide-right absolute inset-y-0 right-0 w-full max-w-[440px] md:inset-y-2.5 md:right-2.5">
+                <ComputerPanel botId={activeId} onClose={() => setRT({ rightOpen: false })} />
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       <BotEditor botId={editor.id} open={editor.open} onClose={() => setEditor({ open: false, id: null })} onCreated={selectBot} />
 
-      {toast && <div className="toast-in lg-pill fixed top-[calc(env(safe-area-inset-top)+14px)] left-1/2 z-[80] rounded-full px-4 py-2.5 text-[14px] font-semibold">{toast}</div>}
+      {toast && <div className="toast-in lg-pill fixed top-[calc(env(safe-area-inset-top)+72px)] left-1/2 z-[80] rounded-full px-4 py-2.5 text-[14px] font-semibold">{toast}</div>}
     </div>
   );
 }

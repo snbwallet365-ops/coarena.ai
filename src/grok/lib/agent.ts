@@ -9,6 +9,12 @@ const R = () => useRuntime.getState();
 // ---------------- Local server ----------------
 export async function checkServer(): Promise<boolean> {
   const url = S().settings.server.url;
+  // A localhost computer server can only exist when the app itself runs locally.
+  // Skip the probe in a deployed/PWA origin instead of firing a doomed request.
+  if (/^(https?:)?\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(url) && !/^(localhost|127\.0\.0\.1|\[::1\])$/i.test(location.hostname)) {
+    R().set({ serverOnline: false });
+    return false;
+  }
   try {
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 1500);
     const r = await fetch(`${url.replace(/\/$/, "")}/health`, { signal: ctl.signal });
@@ -135,7 +141,7 @@ To use a tool, reply with ONE tool call block and nothing after it:
 <tool>{"name":"TOOL_NAME","args":{...}}</tool>
 You may write one short sentence before the block saying what you're doing. Available tools:
 ${bot.tools.map((t) => "- " + TOOL_SPECS[t]).join("\n")}
-${bot.tools.includes("ask_bot") ? `Peer bots: ${peers}` : ""}
+${bot.tools.includes("ask_bot") ? `Peer agents: ${peers}` : ""}
 After each call you receive "TOOL_RESULT". Use as many steps as needed, then give your final answer in Markdown WITHOUT a tool block. Never fabricate tool results.`);
   }
   const pinned = s.docs.filter((d) => d.pinned);
@@ -147,7 +153,7 @@ Always write your ENTIRE reply in natural, fluent, native Bangla (বাংল�
   else parts.push("## LANGUAGE\nReply in the same language the user writes in.");
   if (s.settings.adaptive) parts.push(`## ANSWER DEPTH
 Match the depth to the question. Short or simple question → short, direct answer (1–4 sentences). Long, detailed, multi-part or expert question → a long, thorough, well-structured answer: headings, numbered steps, examples, tables/checklists, and cover every part of the question. Never pad, never skip important detail.`);
-  parts.push(`Current date/time: ${new Date().toString()}. User name: ${s.settings.userName}. Company/workspace: N Space. Format answers in clean Markdown.`);
+  parts.push(`Current date/time: ${new Date().toString()}. User name: ${s.settings.userName}. Company/workspace: Coarena. Format answers in clean Markdown.`);
   return parts.join("\n\n");
 }
 
@@ -282,7 +288,7 @@ export async function runBot(botId: string, userText: string, opt: { routine?: s
             S().pushMsg(peer.id, { id: uid(), role: "note", content: `${bot.name} asked: ${a.message}`, time: Date.now(), from: bot.name });
             S().updateBot(peer.id, { status: "working", preview: `Helping ${bot.name}…` });
             const ans = await streamChat({ provider: peer.provider, model: peer.model, agentId: peer.agentId, apiKey: S().settings.keys[peer.provider], signal: ctl.signal, proxy: S().settings.server.useProxy && R().serverOnline ? S().settings.server.url : null,
-              messages: [{ role: "system", content: peer.system + "\n\n" + (KNOWLEDGE[peer.knowledge ?? ""] ?? "") + `\nYou are answering a request from peer bot ${bot.name}. Be concise.` }, { role: "user", content: String(a.message) }] });
+              messages: [{ role: "system", content: peer.system + "\n\n" + (KNOWLEDGE[peer.knowledge ?? ""] ?? "") + `\nYou are answering a request from peer agent ${bot.name}. Be concise.` }, { role: "user", content: String(a.message) }] });
             S().pushMsg(peer.id, { id: uid(), role: "assistant", content: ans, time: Date.now(), model: `${peer.provider}/${peer.model}` });
             S().updateBot(peer.id, { status: "done", preview: ans.slice(0, 70), updatedAt: Date.now() });
             result = ans; setStep(sid, { status: "done", detail: `${peer.name} replied` }); break;

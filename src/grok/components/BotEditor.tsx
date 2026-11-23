@@ -1,16 +1,17 @@
 // @ts-nocheck
 import { useEffect, useState } from "react";
-import { useStore, PROVIDERS, TOOL_INFO, type Bot, type Provider, type Shape, type ToolName } from "../lib/store";
+import { useStore, useRuntime, PROVIDERS, TOOL_INFO, type Bot, type Provider, type Shape, type ToolName } from "../lib/store";
+import { COARENA_DEFAULT_MODEL } from "../lib/coarena";
 import BotAvatar from "./BotAvatar";
 import { Sheet, Group, Row, Toggle, Field, inputCls } from "./ui";
 import { cn } from "../utils/cn";
 
 const SHAPES: Shape[] = ["circle", "squircle", "triangle", "hex", "diamond", "blob", "pill", "star"];
 const COLORS = ["#1c1c1e", "#007aff", "#34c759", "#ff9500", "#ff3b30", "#5856d6", "#af52de", "#ff2d55", "#00c7be", "#fa520f", "#4d6bfe", "#a2845e"];
-const KNOW = [["", "None"], ["grok", "nSpace Agent harness"], ["visa", "Visa & refusals"], ["legal", "Legal drafting"], ["pdf", "PDF documents"], ["base44", "App builder (Base44)"], ["browser", "Browser-use"]] as const;
+const KNOW = [["", "None"], ["grok", "Coarena agent harness"], ["visa", "Visa & refusals"], ["legal", "Legal drafting"], ["pdf", "PDF documents"], ["base44", "App builder (Base44)"], ["browser", "Browser-use"]] as const;
 const TEMPLATES: Partial<Bot>[] = [
   { name: "Inbox Manager", title: "Email triage", shape: "squircle", color: "#00c7be", system: "You triage email, draft replies and summarise threads.", tools: ["search", "remember", "whatsapp"] },
-  { name: "Visa Rejection Analyst", title: "Refusal → approval plan", shape: "star", color: "#ff9500", provider: "gemini", model: "gemini-2.5-pro", knowledge: "visa", system: "You analyse visa refusal letters line by line and build approval-focused reapplication or appeal strategies.", tools: ["search", "browse", "pdf", "remember"] },
+  { name: "Visa Rejection Analyst", title: "Refusal → approval plan", shape: "star", color: "#ff9500", provider: "coarena", model: COARENA_DEFAULT_MODEL, knowledge: "visa", system: "You analyse visa refusal letters line by line and build approval-focused reapplication or appeal strategies.", tools: ["search", "browse", "pdf", "remember"] },
   { name: "Contract Reviewer", title: "Risk & clause review", shape: "hex", color: "#5856d6", knowledge: "legal", system: "You review contracts, flag risky clauses, and suggest redlines.", tools: ["pdf", "search"] },
   { name: "Web Scraper", title: "Playwright agent", shape: "squircle", color: "#007aff", knowledge: "browser", system: "You extract structured data from websites.", tools: ["browse", "search", "click", "type"] },
   { name: "Mistral Agent", title: "Agents API", shape: "triangle", color: "#fa520f", provider: "mistral", model: "mistral-large-latest", system: "You are a Mistral agent.", tools: ["search", "browse"] },
@@ -22,7 +23,7 @@ export default function BotEditor({ botId, open, onClose, onCreated }: { botId: 
   const [d, setD] = useState<Partial<Bot>>({});
 
   useEffect(() => {
-    if (open) setD(existing ? { ...existing } : { name: "", title: "", shape: "blob", color: "#007aff", provider: "openai", model: "gpt-4o-mini", system: "You are a helpful AI teammate. Be concise and practical.", tools: ["search", "browse", "remember"], knowledge: "" });
+    if (open) setD(existing ? { ...existing } : { name: "", title: "", shape: "blob", color: "#007aff", provider: "coarena", model: COARENA_DEFAULT_MODEL, system: "You are a helpful AI teammate. Be concise and practical.", tools: ["search", "browse", "remember"], knowledge: "" });
   }, [open, botId]);
 
   const up = (p: Partial<Bot>) => setD((x) => ({ ...x, ...p }));
@@ -34,7 +35,8 @@ export default function BotEditor({ botId, open, onClose, onCreated }: { botId: 
     onClose();
   };
   const tools = (d.tools ?? []) as ToolName[];
-  const prov = (d.provider ?? "openai") as Provider;
+  const prov = (d.provider ?? "coarena") as Provider;
+  const models = useRuntime((s) => s.models);
 
   return (
     <Sheet open={open} onClose={onClose} title={existing ? "Edit Agent" : "New Agent"} size="lg"
@@ -73,15 +75,16 @@ export default function BotEditor({ botId, open, onClose, onCreated }: { botId: 
         </Group>
 
         <Group header="AI Provider" footer={prov === "mistral" ? "Optional: paste a Mistral Agent ID (ag_…) to use the Agents API with your pre-configured agent, model & tools." : undefined}>
-          <div className="grid grid-cols-2 gap-1.5 p-2 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-1.5 p-2 sm:grid-cols-3">
             {(Object.keys(PROVIDERS) as Provider[]).map((p) => (
-              <button key={p} onClick={() => up({ provider: p, model: PROVIDERS[p].models[0] })} className={cn("press rounded-xl px-2 py-2.5 text-[13px] font-semibold", prov === p ? "bg-[#007aff] text-white" : "bg-grouped text-label")}>{PROVIDERS[p].label.replace(" · xAI", "")}</button>
+              <button key={p} onClick={() => up({ provider: p, model: (p === "coarena" ? models[0] : PROVIDERS[p].models[0]) ?? COARENA_DEFAULT_MODEL })}
+                className={cn("press rounded-xl px-2 py-2.5 text-[13px] font-semibold", prov === p ? "bg-[#007aff] text-white shadow-[0_4px_12px_rgba(0,122,255,.3)]" : "bg-grouped text-label")}>{PROVIDERS[p].label.replace(" · xAI", "")}</button>
             ))}
           </div>
           <Field label="Model">
             <div className="flex items-center gap-2">
-              <select value={PROVIDERS[prov].models.includes(d.model ?? "") ? d.model : "__custom"} onChange={(e) => e.target.value !== "__custom" && up({ model: e.target.value })} className="w-full bg-transparent text-[16px] text-[#007aff] outline-none">
-                {PROVIDERS[prov].models.map((m) => <option key={m} value={m}>{m}</option>)}
+              <select value={(prov === "coarena" ? models : PROVIDERS[prov].models).includes(d.model ?? "") ? d.model : "__custom"} onChange={(e) => e.target.value !== "__custom" && up({ model: e.target.value })} className="w-full bg-transparent text-[16px] text-[#007aff] outline-none">
+                {(prov === "coarena" ? models : PROVIDERS[prov].models).map((m) => <option key={m} value={m}>{m}</option>)}
                 <option value="__custom">Custom…</option>
               </select>
             </div>

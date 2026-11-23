@@ -1,9 +1,11 @@
 // @ts-nocheck
 import type { Provider } from "./store";
+import { COARENA_CHAT_ENDPOINT, COARENA_FALLBACK_MODELS, COARENA_MODEL_ENDPOINT, COARENA_FEEDBACK_ENDPOINT, type CoarenaFeedback } from "./coarena";
 
 export interface ChatMsg { role: "system" | "user" | "assistant"; content: string }
 
 const ENDPOINT: Record<Exclude<Provider, "gemini">, string> = {
+  coarena: COARENA_CHAT_ENDPOINT,
   openai: "https://api.openai.com/v1/chat/completions",
   xai: "https://api.x.ai/v1/chat/completions",
   deepseek: "https://api.deepseek.com/chat/completions",
@@ -121,7 +123,54 @@ export async function streamChat(o: Opts): Promise<string> {
 
 /** Quick connectivity test for a key. */
 export async function testKey(provider: Provider, apiKey: string, proxy?: string | null): Promise<string> {
-  const model = { xai: "grok-3-mini", openai: "gpt-4o-mini", deepseek: "deepseek-chat", mistral: "mistral-small-latest", gemini: "gemini-2.5-flash" }[provider];
+  const model = { coarena: COARENA_FALLBACK_MODELS[0], xai: "grok-3-mini", openai: "gpt-4o-mini", deepseek: "deepseek-chat", mistral: "mistral-small-latest", gemini: "gemini-2.5-flash" }[provider];
   const out = await streamChat({ provider, model, apiKey, proxy, messages: [{ role: "user", content: "Reply with exactly: OK" }] });
   return out.trim() || "OK";
+}
+
+/**
+ * Fetch the live Coarena model catalogue (GET /v1/models, OpenAI-compatible `data[]`).
+ * Falls back to the bundled list when the network or key is unavailable.
+ */
+export async function listCoarenaModels(apiKey: string, proxy?: string | null): Promise<string[]> {
+  try {
+    const res = await doFetch(COARENA_MODEL_ENDPOINT, {
+      method: "GET",
+      headers: { Accept: "application/json", ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
+    }, proxy);
+    if (!res.ok) throw new Error(`Coarena models ${res.status}`);
+    const j = await res.json();
+    const raw = Array.isArray(j) ? j : j?.data ?? j?.models ?? [];
+    const ids = raw.map((m: any) => (typeof m === "string" ? m : m?.id ?? m?.name)).filter((x: unknown): x is string => typeof x === "string" && x.length > 0);
+    const unique = [...new Set(ids)];
+    return unique.length ? unique : COARENA_FALLBACK_MODELS;
+  } catch {
+    return COARENA_FALLBACK_MODELS;
+  }
+}
+
+/**
+ * Rate a reply: POST /v1/feedback.
+ * Fire-and-forget by design — a failed rating must never interrupt the chat.
+ */
+export async function sendCoarenaFeedback(payload: CoarenaFeedback, apiKey?: string, proxy?: string | null): Promise<boolean> {
+  try {
+    const key = apiKey || "";
+    const res = await doFetch(COARENA_FEEDBACK_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+      body: JSON.stringify({
+        rating: payload.rating,
+        message_id: payload.message_id,
+        model: payload.model,
+        content: payload.content?.slice(0, 4000),
+        comment: payload.comment,
+        agent: payload.agent,
+        source: "coarena-workspace",
+      }),
+    }, proxy);
+    return res.ok;
+  } catch {
+    return false;
+  }
 }

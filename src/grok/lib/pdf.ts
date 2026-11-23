@@ -23,7 +23,7 @@ export function makePdf(title: string, markdown: string): { blob: Blob; url: str
   doc.setFont("helvetica", "bold"); doc.setFontSize(22); doc.setTextColor(17, 17, 17);
   for (const l of doc.splitTextToSize(clean(title), maxW)) { ensure(28); doc.text(l, M, y + 16); y += 28; }
   doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(140, 140, 145);
-  doc.text(`Generated ${new Date().toLocaleString()} · Grok Bot`, M, y + 6); y += 22;
+  doc.text(`Generated ${new Date().toLocaleString()} · Coarena`, M, y + 6); y += 22;
   doc.setDrawColor(229, 229, 234); doc.line(M, y, W - M, y); y += 18;
 
   const lines = markdown.replace(/\r/g, "").split("\n");

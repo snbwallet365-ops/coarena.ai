@@ -1,5 +1,5 @@
 // @ts-nocheck
-// Built-in expert knowledge injected into specialist bots and seeded into the Brain.
+// Built-in expert knowledge injected into specialist agents and seeded into the Brain.
 
 export const VISA_KNOWLEDGE = `
 # VISA EXPERT KNOWLEDGE BASE (built-in)
@@ -105,15 +105,15 @@ export const PDF_KNOWLEDGE = `
 `;
 
 export const GROK_HARNESS_KNOWLEDGE = `
-# How Grok Bot works (harness knowledge)
+# How Coarena agents work (harness knowledge)
 - A turn = one accepted unit of work. A step = one model-and-tool cycle within a turn.
 - The desktop/app sends a message → host builds model context (base policy, profile, pinned sections, rules, skills, tool catalog, user action, history) → calls the provider → runs requested tools → appends tool results → decides whether another step is needed.
 - Checkpoints save conversation + run state; the transcript is what the user sees; learned memory stores facts for future conversations — these are separate stores.
-- Tools: SendToUser (with end_turn), browser, shell, files, MCP, hosted search/media/voice, subagents (task), send_to_agent for peer bots.
+- Tools: SendToUser (with end_turn), browser, shell, files, MCP, hosted search/media/voice, subagents (task), send_to_agent for peer agents.
 - Peer messages and routines get their own prompt context; they are NOT presented as human instructions.
 - Compaction: when context grows, a summary carrier replaces older messages while preserving system prefix and latest user query.
 - Permissions: sensitive actions (sending messages, purchases) require user approval.
-- Routines wake a Bot on schedule without a prompt. All Bots share one computer; Bots are an organisation tool, not a security boundary.
+- Routines wake an Agent on schedule without a prompt. All Agents share one computer; Agents are an organisation tool, not a security boundary.
 `;
 
 export const BASE44_KNOWLEDGE = `

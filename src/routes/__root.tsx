@@ -11,6 +11,9 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+import "@fontsource/noto-sans-bengali/400.css";
+import "@fontsource/noto-sans-bengali/600.css";
+import "@fontsource/noto-sans-bengali/700.css";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -77,13 +80,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" },
-      { title: "N Space · Grok Bot" },
-      { name: "description", content: "Multi-agent AI teammates." },
-      { name: "theme-color", content: "#f9f9fb" },
+      // Zoom is locked on purpose: the workspace is a fixed, app-like layout with
+      // safe-area aware bars, so pinch-zoom would only shift controls.
+      { name: "viewport", content: "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" },
+      { title: "Coarena — AI Agent Workspace" },
+      { name: "description", content: "A real AI agent workspace. Chat with agents that browse the web, build PDFs, run automations and remember what matters — powered by the Coarena Free Model API." },
+      { name: "theme-color", content: "#eef1f8" },
+      { name: "color-scheme", content: "light dark" },
+      { name: "format-detection", content: "telephone=no" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-title", content: "N Space" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "Coarena" },
+      { name: "application-name", content: "Coarena" },
     ],
     links: [
       {
@@ -91,8 +100,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: appCss,
       },
       { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "icon", type: "image/png", href: "/icon-192.png" },
       { rel: "icon", type: "image/png", href: "/icon-512.png" },
-      { rel: "apple-touch-icon", href: "/icon-512.png" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
     ],
   }),
   shellComponent: RootShell,

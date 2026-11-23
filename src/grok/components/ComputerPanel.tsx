@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Maximize2, Globe, Lock, Loader2, ExternalLink, ArrowLeft, ChevronUp, ChevronDown, Monitor, ListTree, FolderOpen, FileDown, MessageCircle, Check, AlertTriangle, Search, MousePointerClick, Keyboard, FileText, Brain, Users, Sparkles, CornerDownLeft, Hand, Terminal } from "lucide-react";
 import { useStore, useRuntime, type Step, type Message } from "../lib/store";
 import { quickBrowse, takeover } from "../lib/agent";
@@ -66,7 +67,7 @@ export function LiveScreen({ botId, interactive = false, fill = false }: { botId
           <div className="relative flex h-full flex-col items-center justify-center text-white" style={{ background: wallpaper(dark) }}>
             <div className="text-[44px] font-light leading-none tracking-tight drop-shadow">{now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</div>
             <div className="mt-1 text-[13px] font-medium opacity-90 drop-shadow">{now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}</div>
-            <div className="lg-pill mt-4 rounded-full px-3 py-1 text-[12px] text-label">Computer idle — ask a Agent to browse</div>
+            <div className="lg-pill mt-4 rounded-full px-3 py-1 text-[12px] text-label">Computer idle — ask an Agent to browse</div>
             <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-2xl bg-white/25 px-2 py-1.5 backdrop-blur">
               {[Globe, Terminal, FolderOpen, FileText].map((I, i) => <span key={i} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/85 text-[#3c3c43]"><I size={14} /></span>)}
             </div>
@@ -140,7 +141,7 @@ export default function ComputerPanel({ botId, onClose }: { botId: string; onClo
       </div>
       <form onSubmit={(e) => { e.preventDefault(); sendKeys(true); }} className="flex items-center gap-2 rounded-[14px] bg-fill px-3">
         <Keyboard size={15} className="text-label2" />
-        <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={online ? "Type into the page…" : "Local server needed for typing"} className="h-10 w-full bg-transparent text-[14px] outline-none placeholder:text-label3" />
+        <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={online ? "Type into the page…" : "Local server needed"} className="h-10 w-full bg-transparent text-[14px] outline-none placeholder:text-label3" />
         <button type="button" onClick={() => sendKeys(false)} disabled={!typed} className="text-[12.5px] font-semibold text-[#007aff] disabled:opacity-30">Type</button>
         <button className="text-[#007aff]"><CornerDownLeft size={15} /></button>
       </form>
@@ -212,7 +213,7 @@ export default function ComputerPanel({ botId, onClose }: { botId: string; onClo
         )}
       </div>
 
-      {full && (
+      {full && createPortal(
         <div className="fade-in fixed inset-0 z-[70] flex flex-col bg-black/55 p-3 backdrop-blur-md md:p-8">
           <div className="pt-safe mb-3 flex items-center gap-3">
             <span className="lg-pill flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-label"><Hand size={14} className="text-[#007aff]" /> You're in control of {bot.name}'s computer</span>
@@ -220,7 +221,8 @@ export default function ComputerPanel({ botId, onClose }: { botId: string; onClo
           </div>
           <div className="min-h-0 flex-1"><LiveScreen botId={botId} interactive fill /></div>
           <div className="mx-auto mt-3 w-full max-w-xl">{controls}</div>
-        </div>
+        </div>,
+        document.body,
       )}
     </aside>
   );

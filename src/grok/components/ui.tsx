@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ChevronRight, X, Menu } from "lucide-react";
 import { useRuntime } from "../lib/store";
 import { cn } from "../utils/cn";
@@ -29,8 +30,8 @@ export function Sheet({ open, onClose, title, children, right, size = "md" }: { 
     const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   }, [open, onClose]);
-  if (!open) return null;
-  return (
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(
     <div className="fixed inset-0 z-[60] flex items-end justify-center md:items-center" onClick={onClose}>
       <div className="fade-in absolute inset-0 bg-black/30 backdrop-blur-[3px]" />
       <div onClick={(e) => e.stopPropagation()}
@@ -46,7 +47,8 @@ export function Sheet({ open, onClose, title, children, right, size = "md" }: { 
         )}
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
