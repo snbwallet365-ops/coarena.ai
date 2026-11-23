@@ -46,18 +46,39 @@ bun run test         # vitest
 
 ### Configure the Coarena key
 
-The key is read from `VITE_COARENA_API_KEY` in `.env` (already set for this workspace).
-You can also change it at runtime in **Connections → Coarena Free Model API**. Keys are
-stored in the browser's local storage and are never included in exported backups.
+The workspace key lives in `.env` as **`COARENA_API_KEY`** (no `VITE_` prefix). It is read
+**inside a server function** (`src/grok/lib/coarenaServer.ts`) and handed to the browser at
+runtime, so it is **never compiled into the client bundle**. Verified: the built
+`.output/public` contains no key material.
 
-> Because Coarena is a client-side PWA, any key shipped in `VITE_*` is visible in the
-> browser. Use a publishable/free-tier key, or proxy requests through your own server.
+Resolution order for every request:
 
-### Optional: real browser control
+1. a key typed in **Connections → Coarena Free Model API** (stored in local storage, always wins), else
+2. `COARENA_API_KEY` from the environment / `.env` (shows as **Live · workspace key**), else
+3. the request fails with a clear "add a key" message and the agent is paused.
 
-Interactive click/type control needs the companion Playwright server. In **Connections →
-Playwright browser server** you'll find the exact command and the server URL. Without it,
-browsing falls back to a cloud reader + screenshot preview.
+### API keys in the app
+
+| Surface | What it does |
+| --- | --- |
+| Connections → Coarena | paste/replace the key, **Test** it, refresh the live model list, make Coarena the provider for every agent |
+| Connections → WhatsApp | one-tap `wa.me` connect, or a Cloud API token + phone-number ID with a **Test** check |
+| Settings → Provider keys | per-provider keys for xAI / OpenAI / DeepSeek / Mistral / Gemini |
+
+### Optional: real browser control (local Playwright computer)
+
+Interactive click / type / scroll needs the companion server shipped in `server/index.mjs`:
+
+```sh
+npm i -D playwright
+npx playwright install chromium
+node server/index.mjs          # → http://localhost:8787
+```
+
+The app detects it automatically (`/health` every 15 s), switches the Computer panel from
+**Cloud preview** to **Playwright · live**, and enables click-to-takeover. Without it the
+panel falls back to a cloud reader + screenshot preview, and any failed step can be retried
+in place.
 
 ## Tech
 

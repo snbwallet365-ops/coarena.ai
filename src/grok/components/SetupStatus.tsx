@@ -1,12 +1,17 @@
 // @ts-nocheck
 import { CheckCircle2, AlertCircle, Globe, MousePointerClick } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useStore, PROVIDERS } from "../lib/store";
+import { hasServerCoarenaKey } from "../lib/providers";
 import BotAvatar from "./BotAvatar";
 
 export default function SetupStatus({ onFix }: { onFix?: () => void }) {
   const bots = useStore((s) => s.bots);
   const keys = useStore((s) => s.settings.keys);
-  const missing = bots.filter((b) => !keys[b.provider]?.trim());
+  const [serverKey, setServerKey] = useState(false);
+  useEffect(() => { let on = true; hasServerCoarenaKey().then((r) => on && setServerKey(r)); return () => { on = false; }; }, []);
+  const hasKey = (p: string) => !!keys[p]?.trim() || (p === "coarena" && serverKey);
+  const missing = bots.filter((b) => !hasKey(b.provider));
   const ready = bots.length - missing.length;
 
   return (
@@ -23,13 +28,13 @@ export default function SetupStatus({ onFix }: { onFix?: () => void }) {
 
       <div className="divide-y divide-fill2">
         {bots.map((b) => {
-          const ok = !!keys[b.provider]?.trim();
+          const ok = hasKey(b.provider);
           return (
             <div key={b.id} className="flex items-center gap-3 py-2.5">
               <BotAvatar shape={b.shape} color={b.color} status="idle" size={30} ring={false} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[15px] font-medium">{b.name}</div>
-                <div className="truncate text-[12.5px] text-label2">{PROVIDERS[b.provider].label} · {b.model}</div>
+                <div className="truncate text-[12.5px] text-label2">{PROVIDERS[b.provider].label} · {b.model}{b.provider === "coarena" && !keys.coarena?.trim() && serverKey ? " · workspace key" : ""}</div>
               </div>
               {ok ? (
                 <span className="flex items-center gap-1 text-[13px] font-semibold text-[#34c759]"><CheckCircle2 size={16} />Ready</span>

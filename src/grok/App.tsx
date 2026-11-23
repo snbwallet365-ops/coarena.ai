@@ -37,7 +37,7 @@ export default function App() {
   });
   const [activeId, setActiveId] = useState<string | null>(() => useStore.getState().bots[0]?.id ?? null);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("ns-collapsed") === "1");
-  const [editor, setEditor] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const [editor, setEditor] = useState<{ open: boolean; id: string | null; preset?: any }>({ open: false, id: null });
   const autoTurn = useRef<string | null>(null);
 
   useEffect(() => { localStorage.setItem("ns-collapsed", collapsed ? "1" : "0"); }, [collapsed]);
@@ -105,6 +105,15 @@ export default function App() {
   }, []);
 
   const selectBot = (id: string) => { setActiveId(id); setSection("agents"); };
+  /** A freshly created agent goes straight to the surface it belongs to. */
+  const onAgentCreated = (id: string) => {
+    setActiveId(id);
+    const created = useStore.getState().bots.find((b) => b.id === id);
+    if (section === "browser" || created?.tools.includes("browse")) {
+      setRT({ rightOpen: true, rightTab: "computer", browserMin: false, preferredBot: id });
+      if (section !== "browser") setSection("agents");
+    } else setSection("agents");
+  };
   const openKeys = () => { setSection("connections"); setRT({ drawer: false }); };
   const showRight = section === "agents" && !!activeId && rightOpen;
 
@@ -115,7 +124,7 @@ export default function App() {
 
   const content = () => {
     switch (section) {
-      case "browser": return <BrowserView onOpenBot={selectBot} />;
+      case "browser": return <BrowserView onOpenBot={selectBot} onNewBot={(preset) => setEditor({ open: true, id: null, preset })} />;
       case "brain": return <BrainView />;
       case "automations": return <AutomationsView />;
       case "routines": return <RoutinesView />;
@@ -184,7 +193,7 @@ export default function App() {
         </>
       )}
 
-      <BotEditor botId={editor.id} open={editor.open} onClose={() => setEditor({ open: false, id: null })} onCreated={selectBot} />
+      <BotEditor botId={editor.id} open={editor.open} preset={editor.preset} onClose={() => setEditor({ open: false, id: null })} onCreated={onAgentCreated} />
 
       {toast && <div className="toast-in lg-pill fixed top-[calc(env(safe-area-inset-top)+72px)] left-1/2 z-[80] rounded-full px-4 py-2.5 text-[14px] font-semibold">{toast}</div>}
     </div>

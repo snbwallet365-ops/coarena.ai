@@ -1,9 +1,9 @@
 // @ts-nocheck
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Maximize2, Globe, Lock, Loader2, ExternalLink, ArrowLeft, ChevronUp, ChevronDown, Monitor, ListTree, FolderOpen, FileDown, MessageCircle, Check, AlertTriangle, Search, MousePointerClick, Keyboard, FileText, Brain, Users, Sparkles, CornerDownLeft, Hand, Terminal } from "lucide-react";
+import { X, Maximize2, Globe, Lock, Loader2, ExternalLink, ArrowLeft, ChevronUp, ChevronDown, Monitor, ListTree, FolderOpen, FileDown, MessageCircle, Check, AlertTriangle, Search, MousePointerClick, Keyboard, FileText, Brain, Users, Sparkles, CornerDownLeft, Hand, Terminal, RotateCcw } from "lucide-react";
 import { useStore, useRuntime, type Step, type Message } from "../lib/store";
-import { quickBrowse, takeover } from "../lib/agent";
+import { quickBrowse, takeover, takeOverControl, resumeControl, retryTurn } from "../lib/agent";
 import BotAvatar, { StatusDot } from "./BotAvatar";
 import { Segmented } from "./ui";
 import { cn } from "../utils/cn";
@@ -37,6 +37,8 @@ export function LiveScreen({ botId, interactive = false, fill = false }: { botId
     : last ? { botId: last.botId, botName: bots.find((x) => x.id === last.botId)?.name ?? "Agent", url: last.url, title: last.title, screenshot: last.screenshot, label: "Last page visited", loading: false } : null;
   useEffect(() => { setAddr(cur?.url ?? ""); setImgOk(true); }, [cur?.url, cur?.screenshot]);
   const running = cur ? !!live[cur.botId] : false;
+  const human = useRuntime((s) => s.takeover);
+  const humanHere = !!human && (!botId || human.botId === botId);
   let host = cur?.url ?? ""; try { host = new URL(host).hostname; } catch { /* */ }
 
   const click = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -73,6 +75,12 @@ export function LiveScreen({ botId, interactive = false, fill = false }: { botId
             </div>
           </div>
         )}
+        {(running || humanHere) && (
+          <span className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-1 text-[10.5px] font-bold uppercase tracking-wide text-white backdrop-blur">
+            <span className={cn("h-1.5 w-1.5 rounded-full", humanHere ? "bg-[#ff9f0a]" : "animate-pulse bg-[#30d158]")} />
+            {humanHere ? "Human control" : "Live"}
+          </span>
+        )}
         {ripple && <span key={ripple.k} className="click-ripple" style={{ left: `${ripple.x * 100}%`, top: `${ripple.y * 100}%` }} />}
       </div>
       <div className="flex h-9 shrink-0 items-center gap-2 px-3 text-[12px]">
@@ -100,6 +108,7 @@ function StepNode({ s, last }: { s: Step; last: boolean }) {
         {s.note && <div className="mt-0.5 text-[12.5px] italic text-label2">{s.note}</div>}
         {s.detail && <div className="truncate text-[12px] text-label2">{s.detail}</div>}
         {s.status === "approval" && <div className="mt-1 text-[12px] font-semibold text-[#ff9500]">Waiting for your approval in chat</div>}
+        {s.status === "error" && <div className="mt-1 text-[12px] font-semibold text-[#ff3b30]">{s.detail}</div>}
         {s.screenshot && <img src={s.screenshot} alt="" loading="lazy" onClick={() => useRuntime.getState().set({ rightTab: "computer", browser: { botId: "", botName: "Step", url: s.url ?? "", screenshot: s.screenshot, label: s.label, loading: false } })} className="mt-1.5 aspect-[16/10] w-40 cursor-pointer rounded-lg border border-sep object-cover object-top" />}
       </div>
     </div>
@@ -113,6 +122,8 @@ export default function ComputerPanel({ botId, onClose }: { botId: string; onClo
   const set = useRuntime((s) => s.set);
   const liveId = useRuntime((s) => s.live[botId]);
   const online = useRuntime((s) => s.serverOnline);
+  const takeoverState = useRuntime((s) => s.takeover);
+  const humanHere = !!takeoverState && takeoverState.botId === botId;
   const [full, setFull] = useState(false);
   const [typed, setTyped] = useState("");
   const actRef = useRef<HTMLDivElement>(null);
@@ -156,9 +167,12 @@ export default function ComputerPanel({ botId, onClose }: { botId: string; onClo
           <BotAvatar shape={bot.shape} color={bot.color} status={liveId ? "working" : bot.status} size={30} ring={false} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[15px] font-semibold">{bot.name}'s computer</div>
-            <div className="flex items-center gap-1.5 text-[11.5px] text-label2"><StatusDot status={liveId ? "working" : bot.status} />{liveId ? "Active · working now" : "Idle"}</div>
+            <div className="flex items-center gap-1.5 text-[11.5px] text-label2">
+              <StatusDot status={humanHere ? "waiting" : liveId ? "working" : bot.status} />
+              {humanHere ? "Paused · human in control" : liveId ? "Active · working now" : bot.status === "error" ? "Last run failed" : bot.status === "waiting" ? "Waiting for approval" : bot.status === "done" ? "Done · idle" : "Idle"}
+            </div>
           </div>
-          <button onClick={() => setFull(true)} title="Take over" className="press flex h-8 w-8 items-center justify-center rounded-full text-label2 hover:bg-fill"><Hand size={16} /></button>
+          <button onClick={() => { takeOverControl(botId); setFull(true); }} title="Take over" className="press flex h-8 w-8 items-center justify-center rounded-full text-label2 hover:bg-fill"><Hand size={16} /></button>
           <button onClick={onClose} className="press flex h-8 w-8 items-center justify-center rounded-full bg-fill text-label2"><X size={15} /></button>
         </div>
         <div className="px-4 pb-3">
@@ -171,6 +185,16 @@ export default function ComputerPanel({ botId, onClose }: { botId: string; onClo
       </div>
 
       <div ref={actRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+        {humanHere && (
+          <div className="fade-up mb-3 flex items-center gap-2 rounded-[14px] bg-[#ff9500]/12 px-3 py-2.5">
+            <Hand size={15} className="shrink-0 text-[#ff9500]" />
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-semibold">You're in control</div>
+              <div className="text-[11.5px] text-label2">The agent is paused while you drive the browser.</div>
+            </div>
+            <button onClick={() => resumeControl(botId)} className="press shrink-0 rounded-full bg-[#ff9500] px-3 py-1.5 text-[12.5px] font-semibold text-white">Resume agent</button>
+          </div>
+        )}
         {tab === "computer" && <div className="fade-in"><LiveScreen botId={botId} interactive />{controls}</div>}
 
         {tab === "activity" && (
@@ -190,6 +214,11 @@ export default function ComputerPanel({ botId, onClose }: { botId: string; onClo
                       <div className="min-w-0 pt-1">
                         <div className={cn("text-[13.5px] font-medium", isLive && "shimmer-text")}>{t.reply.error ? "Failed" : isLive ? (t.reply.content ? "Writing response…" : "Thinking…") : "Responded"}</div>
                         <div className="truncate text-[12px] text-label2">{new Date(t.reply.time).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · {t.reply.model}</div>
+                        {t.reply.error && (
+                          <button onClick={() => retryTurn(botId, t.reply!.id)} className="press mt-1.5 flex items-center gap-1 rounded-full bg-[#007aff]/10 px-2.5 py-1 text-[12px] font-semibold text-[#007aff]">
+                            <RotateCcw size={11} /> Retry this step
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -217,7 +246,8 @@ export default function ComputerPanel({ botId, onClose }: { botId: string; onClo
         <div className="fade-in fixed inset-0 z-[70] flex flex-col bg-black/55 p-3 backdrop-blur-md md:p-8">
           <div className="pt-safe mb-3 flex items-center gap-3">
             <span className="lg-pill flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-label"><Hand size={14} className="text-[#007aff]" /> You're in control of {bot.name}'s computer</span>
-            <button onClick={() => setFull(false)} className="press ml-auto rounded-full bg-white px-4 py-1.5 text-[13.5px] font-semibold text-black">Hand back</button>
+            {humanHere && <button onClick={() => { resumeControl(botId); setFull(false); }} className="press ml-auto rounded-full bg-[#ff9500] px-4 py-1.5 text-[13.5px] font-semibold text-white">Resume agent</button>}
+            <button onClick={() => setFull(false)} className={cn("press rounded-full bg-white px-4 py-1.5 text-[13.5px] font-semibold text-black", !humanHere && "ml-auto")}>Hand back</button>
           </div>
           <div className="min-h-0 flex-1"><LiveScreen botId={botId} interactive fill /></div>
           <div className="mx-auto mt-3 w-full max-w-xl">{controls}</div>

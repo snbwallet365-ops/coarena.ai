@@ -25,11 +25,68 @@ export async function checkServer(): Promise<boolean> {
   } catch { R().set({ serverOnline: false }); return false; }
 }
 const server = () => S().settings.server.url.replace(/\/$/, "");
-async function srv(path: string, body?: unknown) {
-  const r = await fetch(server() + path, { method: body ? "POST" : "GET", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
-  const j = await r.json();
-  if (!r.ok || j.error) throw new Error(j.error || r.statusText);
-  return j;
+
+function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
+
+/** True when the browser server refused the connection (offline / not started). */
+const isOffline = (e: any) => /failed to fetch|networkerror|econnrefused|load failed|aborted/i.test(String(e?.message ?? e));
+
+/**
+ * Call the local computer server with a hard timeout and one automatic retry,
+ * so a slow or restarting Playwright server never hangs a run.
+ */
+async function srv(path: string, body?: unknown, retries = 1): Promise<any> {
+  let lastErr: any;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 20000);
+    try {
+      const r = await fetch(server() + path, {
+        method: body ? "POST" : "GET", signal: ctl.signal,
+        headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined,
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.error) throw new Error(j.error || r.statusText || `Server ${r.status}`);
+      return j;
+    } catch (e: any) {
+      lastErr = e;
+      if (isOffline(e)) { R().set({ serverOnline: false }); break; }   // no point retrying a dead server
+      if (attempt < retries) await sleep(350 * (attempt + 1));
+    } finally { clearTimeout(t); }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr ?? "Browser server failed"));
+}
+
+// ---------------- Human Take Over / Resume ----------------
+/** Pause the agent and hand the browser to the human. Aborts the running turn. */
+export function takeOverControl(botId: string) {
+  const rt = R();
+  rt.controllers[botId]?.abort();
+  rt.set({ takeover: { botId, since: Date.now() }, live: { ...rt.live, [botId]: null } });
+  S().updateBot(botId, { status: "waiting", preview: "Human in control", updatedAt: Date.now() });
+  rt.showToast("You're in control — the agent is paused");
+}
+
+/** Hand control back: clears the pause and puts the agent back to idle. */
+export function resumeControl(botId: string) {
+  const rt = R();
+  if (!rt.takeover || rt.takeover.botId !== botId) return;
+  rt.set({ takeover: null });
+  S().updateBot(botId, { status: "idle", preview: "Ready when you are", updatedAt: Date.now() });
+  rt.showToast("Agent resumed — you can keep chatting");
+}
+
+/** Re-run a failed turn with the same prompt (removes the failed reply first). */
+export function retryTurn(botId: string, messageId: string) {
+  const thread = S().threads[botId] ?? [];
+  const idx = thread.findIndex((m) => m.id === messageId);
+  if (idx < 0) return;
+  let prompt = "";
+  for (let i = idx; i >= 0; i--) if (thread[i].role === "user") { prompt = thread[i].content; break; }
+  if (!prompt || R().live[botId]) return;
+  S().removeMsg(botId, messageId);
+  R().showToast("Retrying…");
+  runBot(botId, prompt);
 }
 
 // ---------------- Browser tools ----------------
@@ -180,6 +237,7 @@ export async function runBot(botId: string, userText: string, opt: { routine?: s
   const s = S();
   const bot0 = s.bots.find((b) => b.id === botId);
   if (!bot0 || R().live[botId]) return "";
+  if (R().takeover?.botId === botId) { R().showToast("Human in control — press Resume first"); return ""; }
 
   const attachText = (opt.attachments ?? []).map((a) => `\n\n[Attached file: ${a.name}]\n${a.text.slice(0, 20000)}`).join("");
   if (opt.routine) s.pushMsg(botId, { id: uid(), role: "note", content: `Routine ran · ${opt.routine}`, time: Date.now() });
@@ -192,6 +250,18 @@ export async function runBot(botId: string, userText: string, opt: { routine?: s
   const ctl = new AbortController();
   R().set({ live: { ...R().live, [botId]: mid }, controllers: { ...R().controllers, [botId]: ctl } });
   s.updateBot(botId, { status: "working", preview: opt.routine ? `Running routine: ${opt.routine}` : "Working…", updatedAt: Date.now() });
+
+  // Keep the Computer panel "live" even between tool calls: poll the real
+  // browser every ~900ms while this turn runs and the local server is online.
+  let hbStop = false;
+  (async () => {
+    while (!hbStop) {
+      if (R().serverOnline) {
+        try { const j = await srv("/browser/screenshot", undefined, 0); if (!hbStop && j?.screenshot) liveBrowser(bot, j.url || R().browser?.url || "", R().browser?.label ?? "Working", true, j.screenshot, j.title); } catch { /* server may be gone */ }
+      }
+      await sleep(900);
+    }
+  })();
 
   const patch = (fn: (m: any) => any) => S().patchMsg(botId, mid, fn);
   const addStep = (st: Step) => patch((m) => ({ ...m, steps: [...(m.steps ?? []), st] }));
@@ -313,6 +383,7 @@ export async function runBot(botId: string, userText: string, opt: { routine?: s
     patch((m) => ({ ...m, error: aborted ? undefined : err, content: m.content || (aborted ? "_Stopped._" : "") }));
     S().updateBot(botId, { status: aborted ? "idle" : "error", preview: aborted ? "Stopped" : err.startsWith("NO_KEY") ? "Add an API key to start" : "Something went wrong", updatedAt: Date.now() });
   } finally {
+    hbStop = true;
     const live = { ...R().live }; delete live[botId];
     const ctls = { ...R().controllers }; delete ctls[botId];
     R().set({ live, controllers: ctls });

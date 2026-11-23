@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Mic, Paperclip, Square, SlidersHorizontal, X, Trash2, ChevronDown, Smartphone, Monitor, Tablet, RefreshCw, Download, Loader2, PanelRight, Sparkles } from "lucide-react";
 import { useStore, useRuntime, PROVIDERS, type Provider } from "../lib/store";
 import { runBot, stopBot } from "../lib/agent";
-import { listCoarenaModels } from "../lib/providers";
+import { listCoarenaModels, hasServerCoarenaKey } from "../lib/providers";
 import { prettyModel } from "../lib/coarena";
 import BotAvatar, { StatusDot } from "./BotAvatar";
 import MessageItem from "./MessageItem";
@@ -66,7 +66,9 @@ export default function ChatView({ botId, onEdit, onOpenKeys }: { botId: string;
 
   if (!bot) return null;
   const busy = !!liveId;
-  const hasKey = !!keys[bot.provider];
+  const [serverKey, setServerKey] = useState(false);
+  useEffect(() => { let on = true; hasServerCoarenaKey().then((r) => on && setServerKey(r)); return () => { on = false; }; }, []);
+  const hasKey = !!keys[bot.provider] || (bot.provider === "coarena" && serverKey);
   const liveMsg = busy ? thread.find((m) => m.id === liveId) : null;
   const liveStep = liveMsg?.steps?.slice().reverse().find((s) => s.status === "running" || s.status === "approval");
   const liveLabel = liveStep ? liveStep.label : liveMsg?.content ? (lang === "bn" ? "উত্তর লিখছে…" : "Writing response…") : (lang === "bn" ? "ভাবছে…" : "Thinking…");
@@ -239,7 +241,8 @@ export default function ChatView({ botId, onEdit, onOpenKeys }: { botId: string;
                 <div className="mb-1.5 flex items-center gap-2 px-2 text-[13px] uppercase text-label2">
                   {PROVIDERS[p].label}
                   {p === "coarena" && <span className="rounded-full bg-[#0a84ff]/12 px-1.5 py-px text-[10px] font-bold normal-case tracking-wide text-[#0a84ff]">DEFAULT</span>}
-                  {!keys[p] && <span className="normal-case text-[#ff9500]">· no key</span>}
+                  {!keys[p] && !(p === "coarena" && serverKey) && <span className="normal-case text-[#ff9500]">· no key</span>}
+                  {p === "coarena" && !keys[p] && serverKey && <span className="normal-case text-[#34c759]">· workspace key</span>}
                   {p === "coarena" && (
                     <button onClick={async () => { setRTModels({ modelsLoading: true }); const m = await listCoarenaModels(keys.coarena); setRTModels({ models: m, modelsLoading: false }); showToast(m.length > 1 ? `${m.length} models loaded` : "Using the built-in model list"); }}
                       className="ml-auto flex items-center gap-1 normal-case text-[#007aff] disabled:opacity-40" disabled={modelsLoading}>

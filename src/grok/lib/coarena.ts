@@ -7,14 +7,13 @@
  * Chat completions:             POST https://coarena.ai/api/v1/chat/completions
  * Reply rating / feedback:      POST https://coarena.ai/api/v1/feedback
  *
- * The key is read from VITE_COARENA_API_KEY (.env) so it can be overridden per
- * deployment without touching code. It is a client-side app, so the key is
- * delivered to the browser — treat it as a publishable key.
+ * The key is NEVER compiled into this client module. It is resolved at runtime
+ * through `coarenaServer.ts` (server function) or typed by the user in
+ * Connections, so the browser bundle contains no credentials.
  */
 export const COARENA_API_BASE = "https://coarena.ai/api/v1";
-export const COARENA_API_KEY: string = (
-  (import.meta.env["VITE_COARENA_API_KEY"] as string | undefined) ?? ""
-).trim();
+/** @deprecated Kept for callers that still reference it — always empty now. Use the server bridge. */
+export const COARENA_API_KEY: string = "";
 
 export const COARENA_DEFAULT_MODEL: string = (
   (import.meta.env["VITE_COARENA_MODEL"] as string | undefined) ?? ""

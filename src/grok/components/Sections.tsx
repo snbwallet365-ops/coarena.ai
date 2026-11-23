@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Globe, Play, Plus, Clock, ExternalLink, Server, CheckCircle2, XCircle, Loader2, Copy, MessageCircle, KeyRound, Download, Upload, Bell, ShieldCheck, Gauge, Thermometer, User, Smartphone, RotateCcw, Eye, EyeOff, Terminal, Sparkles, RefreshCw, Zap, Check, ThumbsUp, ThumbsDown, PanelRightOpen } from "lucide-react";
 import { useStore, useRuntime, PROVIDERS, type Provider, type Routine } from "../lib/store";
-import { listCoarenaModels, testKey } from "../lib/providers";
+import { listCoarenaModels, testKey, pingCoarenaServer, hasServerCoarenaKey, coarenaKeySource } from "../lib/providers";
 import { checkServer, quickBrowse, runBot } from "../lib/agent";
 import BotAvatar from "./BotAvatar";
 import { LargeTitle, Group, Row, Toggle, Sheet, Field, inputCls, Pill, Segmented } from "./ui";
@@ -11,7 +11,18 @@ import SetupStatus from "./SetupStatus";
 import { cn } from "../utils/cn";
 
 const ago = (t: number) => { const s = (Date.now() - t) / 1000; if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return new Date(t).toLocaleDateString(); };
-const CMD = "npm run build && npx playwright install chromium && node server/index.mjs";
+const CMD = "npx playwright install chromium && node server/index.mjs";
+
+/** Prefill for the "New browser agent" shortcut — identical to the editor template. */
+const BROWSER_AGENT_PRESET = {
+  name: "Browser Pilot",
+  title: "Browser automation · live preview",
+  shape: "squircle",
+  color: "#007aff",
+  knowledge: "browser",
+  system: "You are Browser Pilot, an autonomous browser operator. You drive the Computer & Browser panel: open pages, read them, click, fill forms and extract data step by step. Always say what you are about to do in one short sentence, then act. If a page fails to load, retry once, then fall back to a search. Summarise results as a clear list with URLs.",
+  tools: ["browse", "search", "click", "type", "remember"],
+};
 
 function ServerCard() {
   const online = useRuntime((s) => s.serverOnline);
@@ -40,13 +51,23 @@ function ServerCard() {
 }
 
 // ---------------- Browser ----------------
-export function BrowserView({ onOpenBot }: { onOpenBot: (id: string) => void }) {
+export function BrowserView({ onOpenBot, onNewBot }: { onOpenBot: (id: string) => void; onNewBot?: (preset?: any) => void }) {
   const sessions = useStore((s) => s.sessions);
   const bots = useStore((s) => s.bots);
   const clear = useStore((s) => s.clearSessions);
   const browserBots = bots.filter((b) => b.tools.includes("browse"));
   const [task, setTask] = useState("");
-  const [botId, setBotId] = useState(browserBots.find((b) => b.id === "browser")?.id ?? browserBots[0]?.id ?? "");
+  const [botId, setBotId] = useState(() => {
+    const pref = useRuntime.getState().preferredBot;
+    return browserBots.find((b) => b.id === pref)?.id ?? browserBots.find((b) => b.id === "browser")?.id ?? browserBots[0]?.id ?? "";
+  });
+  // A freshly created browser agent becomes the runner immediately.
+  const prefId = useRuntime((s) => s.preferredBot);
+  useEffect(() => {
+    if (!prefId) return;
+    const b = useStore.getState().bots.find((x) => x.id === prefId);
+    if (b?.tools.includes("browse")) setBotId(b.id);
+  }, [prefId]);
   const [url, setUrl] = useState("");
 
   return (
@@ -57,17 +78,26 @@ export function BrowserView({ onOpenBot }: { onOpenBot: (id: string) => void }) 
           className="press lg-pill flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-semibold text-[#007aff]">
           <PanelRightOpen size={15} /> Open beside chat
         </button>
+        <button onClick={() => onNewBot?.(BROWSER_AGENT_PRESET)}
+          className="press lg-pill flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-semibold text-[#007aff]">
+          <Plus size={15} /> New browser agent
+        </button>
         <span className="text-[12px] text-label2">Split view · drag the divider to resize</span>
       </div>
       <div className="mx-4 mb-6 md:mx-7"><LiveScreen interactive /></div>
       <ServerCard />
 
+      {browserBots.length === 0 && (
+        <div className="mx-4 mb-5 rounded-[18px] bg-[#ff9500]/10 p-4 text-[14px] leading-snug text-label2 md:mx-7">
+          <b className="text-[#ff9500]">No browser agent yet.</b> Create one — it gets the browse, click and type tools and shows up here with a live screen and step log.
+        </div>
+      )}
       <Group header="Run a browser task" className="mx-4 md:mx-7">
         <div className="p-3">
           <textarea value={task} onChange={(e) => setTask(e.target.value)} rows={3} placeholder="e.g. Find the 3 cheapest flights from London to Dubai next Friday and list prices" className="w-full resize-none bg-transparent text-[16px] outline-none placeholder:text-label3" />
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <select value={botId} onChange={(e) => setBotId(e.target.value)} className="rounded-full bg-grouped px-3 py-1.5 text-[14px] font-medium text-[#007aff] outline-none">
-              {browserBots.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              {browserBots.map((b) => <option key={b.id} value={b.id}>{b.name}{b.status === "working" ? " · working" : b.status === "error" ? " · error" : ""}</option>)}
             </select>
             <div className="flex-1" />
             <button disabled={!task.trim() || !botId} onClick={() => { runBot(botId, task.trim()); setTask(""); onOpenBot(botId); }} className="press flex items-center gap-1.5 rounded-full bg-[#007aff] px-4 py-2 text-[14px] font-semibold text-white disabled:opacity-40"><Play size={14} fill="currentColor" /> Run</button>
@@ -205,7 +235,13 @@ function CoarenaCard() {
   const toast = useRuntime((s) => s.showToast);
   const [show, setShow] = useState(false);
   const [state, setState] = useState<"idle" | "testing" | "ok" | "fail">("idle");
+  const [serverKey, setServerKey] = useState<"checking" | "ok" | "none">("checking");
+  const [errMsg, setErrMsg] = useState("");
   const coarenaBots = bots.filter((b) => b.provider === "coarena").length;
+
+  // Is there a workspace key on the server? Then the app works with zero setup.
+  useEffect(() => { let on = true; hasServerCoarenaKey().then((r) => { if (on) setServerKey(r ? "ok" : "none"); }); return () => { on = false; }; }, []);
+  const recheck = () => { setServerKey("checking"); hasServerCoarenaKey().then((r) => setServerKey(r ? "ok" : "none")); };
 
   const refresh = async () => {
     set({ modelsLoading: true });
@@ -214,9 +250,13 @@ function CoarenaCard() {
     toast(m.length > 1 ? `${m.length} models loaded from Coarena` : "Using the built-in model list");
   };
   const test = async () => {
-    setState("testing");
+    setState("testing"); setErrMsg("");
     try { await testKey("coarena", key, settings.server.useProxy ? settings.server.url : null); setState("ok"); toast("Coarena connected · key is valid"); }
-    catch (e: any) { setState("fail"); toast(String(e?.message ?? e).slice(0, 120)); }
+    catch (e: any) {
+      setState("fail");
+      const raw = String(e?.message ?? e);
+      setErrMsg(/NO_KEY/.test(raw) ? "No key yet — paste a Coarena key (coa_…) above." : raw === "Failed to fetch" ? "Blocked by the browser — try again or use the local proxy." : raw.slice(0, 140));
+    }
   };
   const makeDefault = () => {
     bots.filter((b) => b.provider !== "coarena").forEach((b) => updateBot(b.id, { provider: "coarena", model: models[0] ?? b.model }));
@@ -235,10 +275,14 @@ function CoarenaCard() {
               <span className="text-[18px] font-bold tracking-tight">Coarena Free Model API</span>
               <span className="rounded-full bg-[#0a84ff]/12 px-2 py-px text-[10.5px] font-bold uppercase tracking-wide text-[#0a84ff]">Default provider</span>
             </div>
-            <div className="mt-0.5 text-[13px] text-label2">One key powers every agent · OpenAI-compatible · {coarenaBots} agent{coarenaBots === 1 ? "" : "s"} connected</div>
+            <div className="mt-0.5 text-[13px] text-label2">
+              {key ? "Your key · stored only on this device" : serverKey === "ok" ? "Using the workspace key held on the server — nothing is embedded in the app" : "Add a coa_… key, or set COARENA_API_KEY on the server"}
+              {" · "}{coarenaBots} agent{coarenaBots === 1 ? "" : "s"} connected
+            </div>
           </div>
-          <span className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold", key ? "bg-[#34c759]/12 text-[#34c759]" : "bg-[#ff9500]/12 text-[#ff9500]")}>
-            <span className={cn("h-1.5 w-1.5 rounded-full", key ? "bg-[#34c759]" : "bg-[#ff9500]")} />{key ? "Live" : "Add key"}
+          <span className={cn("flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold", key || serverKey === "ok" ? "bg-[#34c759]/12 text-[#34c759]" : "bg-[#ff9500]/12 text-[#ff9500]")}>
+            {serverKey === "checking" && !key ? <Loader2 size={11} className="animate-spin" /> : <span className={cn("h-1.5 w-1.5 rounded-full", key || serverKey === "ok" ? "bg-[#34c759]" : "bg-[#ff9500]")} />}
+            {key ? "Live · your key" : serverKey === "ok" ? "Live · workspace key" : serverKey === "checking" ? "Checking…" : "Add key"}
           </span>
         </div>
 
@@ -248,10 +292,23 @@ function CoarenaCard() {
             onChange={(e) => { setState("idle"); setSettings((s) => ({ ...s, keys: { ...s.keys, coarena: e.target.value.trim() } })); }}
             className="h-10 w-full bg-transparent font-mono text-[13.5px] outline-none placeholder:text-label3" />
           <button onClick={() => setShow(!show)} className="text-label2">{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-          <button disabled={!key || state === "testing"} onClick={test} className="press shrink-0 rounded-full bg-surface px-3 py-1 text-[12.5px] font-semibold text-[#007aff] shadow-sm disabled:opacity-40">
+          <button disabled={(!key && serverKey !== "ok") || state === "testing"} onClick={test} className="press shrink-0 rounded-full bg-surface px-3 py-1 text-[12.5px] font-semibold text-[#007aff] shadow-sm disabled:opacity-40">
             {state === "testing" ? <Loader2 size={13} className="animate-spin" /> : state === "ok" ? <Check size={13} /> : "Test"}
           </button>
         </div>
+
+        {errMsg && (
+          <div className="relative mt-2 flex items-start gap-1.5 rounded-[12px] bg-[#ff3b30]/8 px-3 py-2 text-[12.5px] text-[#ff3b30]">
+            <XCircle size={13} className="mt-0.5 shrink-0" /><span>{errMsg}</span>
+          </div>
+        )}
+        {key && serverKey === "ok" && (
+          <button onClick={() => { setSettings((s) => ({ ...s, keys: { ...s.keys, coarena: "" } })); setState("idle"); setErrMsg(""); toast("Switched to the workspace key"); }}
+            className="press relative mt-2 text-[12px] font-semibold text-[#007aff]">Use the workspace key instead</button>
+        )}
+        {serverKey === "none" && !key && (
+          <button onClick={recheck} className="press relative mt-2 flex items-center gap-1 text-[12px] font-semibold text-[#007aff]"><RefreshCw size={11} /> Re-check for a workspace key</button>
+        )}
 
         <div className="relative mt-3 flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-[11.5px] font-semibold uppercase tracking-wide text-label2">Models</span>
@@ -280,8 +337,25 @@ export function ConnectionsView() {
   const setSettings = useStore((s) => s.setSettings);
   const toast = useRuntime((s) => s.showToast);
   const [waOpen, setWaOpen] = useState(false);
+  const [waTest, setWaTest] = useState<"idle" | "testing" | "ok" | "fail">("idle");
+  const [waMsg, setWaMsg] = useState("");
   const wa = settings.whatsapp;
   const setWa = (p: Partial<typeof wa>) => setSettings((s) => ({ ...s, whatsapp: { ...s.whatsapp, ...p } }));
+
+  const testWa = async () => {
+    setWaTest("testing"); setWaMsg("");
+    try {
+      const r = await fetch(`https://graph.facebook.com/v21.0/${wa.phoneNumberId}?fields=id,display_phone_number,verified_name`, { headers: { Authorization: `Bearer ${wa.token}` } });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.error) throw new Error(j?.error?.message || `WhatsApp ${r.status}`);
+      setWaTest("ok"); setWaMsg(`Connected · ${j.display_phone_number || j.verified_name || wa.phoneNumberId}`);
+      toast("WhatsApp Cloud API key is valid");
+    } catch (e: any) {
+      setWaTest("fail");
+      const raw = String(e?.message ?? e);
+      setWaMsg(raw === "Failed to fetch" ? "Blocked by the browser — check the token or try again" : raw.slice(0, 140));
+    }
+  };
 
   return (
     <div className="h-full overflow-y-auto pb-10">
@@ -293,7 +367,7 @@ export function ConnectionsView() {
           <span className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-[#25d366] text-white"><MessageCircle size={26} fill="white" /></span>
           <div className="min-w-0 flex-1">
             <div className="text-[16px] font-semibold">WhatsApp</div>
-            <div className="truncate text-[13px] text-label2">{wa.connected ? `Connected · +${wa.phone}${wa.token ? " · Cloud API" : " · one-tap links"}` : "Get Agent results on WhatsApp in one tap"}</div>
+            <div className="truncate text-[13px] text-label2">{wa.connected ? `Connected · +${wa.phone}${wa.token ? (waTest === "ok" ? " · Cloud API verified" : " · Cloud API") : " · one-tap links"}` : "Get Agent results on WhatsApp in one tap"}</div>
           </div>
           {wa.connected ? <Pill color="#34c759" onClick={() => setWaOpen(true)}>Manage</Pill> : <button onClick={() => setWaOpen(true)} className="press rounded-full bg-[#25d366] px-4 py-2 text-[14px] font-semibold text-white">Connect</button>}
         </div>
@@ -325,8 +399,17 @@ export function ConnectionsView() {
           <button disabled={wa.phone.length < 8} onClick={() => { setWa({ connected: true }); window.open(`https://wa.me/${wa.phone}?text=${encodeURIComponent("✅ Coarena Agent is connected to this WhatsApp.")}`, "_blank"); toast("WhatsApp connected"); }}
             className="press mb-7 w-full rounded-[14px] bg-[#25d366] py-3.5 text-[17px] font-semibold text-white disabled:opacity-40">One-tap connect & send test</button>
           <Group header="Optional · WhatsApp Cloud API" footer="For fully automatic sending (no tap), add a Meta WhatsApp Cloud API token and Phone Number ID from developers.facebook.com.">
-            <Field label="Token"><input type="password" value={wa.token} onChange={(e) => setWa({ token: e.target.value.trim() })} placeholder="EAAG…" className={inputCls} /></Field>
-            <Field label="Phone ID"><input value={wa.phoneNumberId} onChange={(e) => setWa({ phoneNumberId: e.target.value.trim() })} placeholder="1234567890" className={inputCls} /></Field>
+            <Field label="Token"><input type="password" value={wa.token} onChange={(e) => { setWa({ token: e.target.value.trim() }); setWaTest("idle"); setWaMsg(""); }} placeholder="EAAG…" className={inputCls} /></Field>
+            <Field label="Phone ID"><input value={wa.phoneNumberId} onChange={(e) => { setWa({ phoneNumberId: e.target.value.trim() }); setWaTest("idle"); setWaMsg(""); }} placeholder="1234567890" className={inputCls} /></Field>
+            <Row icon={<CheckCircle2 size={17} />} iconBg={waTest === "ok" ? "#34c759" : "#8e8e93"}
+              title={waTest === "ok" ? "Cloud API ready" : waTest === "fail" ? "Cloud API check failed" : "Verify the Cloud API key"}
+              subtitle={waMsg || (wa.token && wa.phoneNumberId ? "Token and phone number ID look complete" : "Add both fields to enable automatic sending")}
+              onClick={wa.token && wa.phoneNumberId ? testWa : undefined}
+              right={wa.token && wa.phoneNumberId ? (
+                <button onClick={testWa} disabled={waTest === "testing"} className="press shrink-0 rounded-full bg-surface px-3 py-1 text-[13px] font-semibold text-[#007aff] shadow-sm disabled:opacity-40">
+                  {waTest === "testing" ? <Loader2 size={13} className="animate-spin" /> : waTest === "ok" ? <Check size={13} /> : "Test"}
+                </button>
+              ) : undefined} />
           </Group>
           {wa.connected && <Group><Row title="Disconnect WhatsApp" danger onClick={() => { setWa({ connected: false, token: "", phoneNumberId: "" }); setWaOpen(false); }} /></Group>}
         </div>

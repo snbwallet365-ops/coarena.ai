@@ -4,6 +4,59 @@ import { COARENA_CHAT_ENDPOINT, COARENA_FALLBACK_MODELS, COARENA_MODEL_ENDPOINT,
 
 export interface ChatMsg { role: "system" | "user" | "assistant"; content: string }
 
+// ---------------- Key resolution ----------------
+let serverKeyCache: string | null = null;
+
+/**
+ * Resolve the Coarena key for a request:
+ *   1. a key the user typed in Connections (always wins), else
+ *   2. the workspace key held on the server (never shipped to the browser bundle).
+ * Returns "" when neither is available so callers can show a clear error.
+ */
+export async function resolveCoarenaKey(apiKey?: string | null): Promise<string> {
+  const own = (apiKey ?? "").trim();
+  if (own) return own;
+  if (serverKeyCache !== null) return serverKeyCache;
+  try {
+    const mod: any = await import("./coarenaServer");
+    const r = await mod.getCoarenaKey();
+    serverKeyCache = String(r?.key ?? "").trim();
+  } catch {
+    serverKeyCache = "";
+  }
+  return serverKeyCache;
+}
+
+/** "connections" when the user supplied their own key, otherwise "server". */
+export function coarenaKeySource(apiKey?: string | null): "connections" | "server" | "none" {
+  if ((apiKey ?? "").trim()) return "connections";
+  if (serverKeyCache) return "server";
+  return "none";
+}
+
+let serverConfigured: boolean | null = null;
+
+/** True when the server holds a workspace key (no network round-trip). */
+export async function hasServerCoarenaKey(): Promise<boolean> {
+  if (serverConfigured !== null) return serverConfigured;
+  try {
+    const mod: any = await import("./coarenaServer");
+    const r = await mod.coarenaKeyStatus();
+    serverConfigured = !!r?.configured;
+  } catch { serverConfigured = false; }
+  return serverConfigured;
+}
+
+/** Ask the server to verify the Coarena key and list models (no browser CORS). */
+export async function pingCoarenaServer(): Promise<{ ok: boolean; error?: string; models?: string[] }> {
+  try {
+    const mod: any = await import("./coarenaServer");
+    return await mod.coarenaPing();
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message ?? e) };
+  }
+}
+
 const ENDPOINT: Record<Exclude<Provider, "gemini">, string> = {
   coarena: COARENA_CHAT_ENDPOINT,
   openai: "https://api.openai.com/v1/chat/completions",
@@ -55,7 +108,8 @@ async function* sseLines(res: Response) {
 }
 
 export async function streamChat(o: Opts): Promise<string> {
-  if (!o.apiKey) throw new Error(`NO_KEY:${o.provider}`);
+  const apiKey = o.provider === "coarena" ? await resolveCoarenaKey(o.apiKey) : o.apiKey;
+  if (!apiKey) throw new Error(`NO_KEY:${o.provider}`);
   let full = "";
   // Merge consecutive same-role messages (required by Gemini, safer for all providers)
   o = { ...o, messages: o.messages.reduce<ChatMsg[]>((acc, m) => {
@@ -67,7 +121,7 @@ export async function streamChat(o: Opts): Promise<string> {
   if (o.provider === "gemini") {
     const sys = o.messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
     const contents = o.messages.filter((m) => m.role !== "system").map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(o.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(o.apiKey)}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(o.model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(apiKey)}`;
     const res = await doFetch(url, {
       method: "POST", signal: o.signal, headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}), contents, generationConfig: { temperature: o.temperature ?? 0.7 } }),
@@ -102,7 +156,7 @@ export async function streamChat(o: Opts): Promise<string> {
 
   const res = await doFetch(url, {
     method: "POST", signal: o.signal,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${o.apiKey}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify(body),
   }, o.proxy);
   if (!res.ok) throw new Error(`${o.provider} ${res.status}: ${await readError(res)}`);
@@ -133,6 +187,11 @@ export async function testKey(provider: Provider, apiKey: string, proxy?: string
  * Falls back to the bundled list when the network or key is unavailable.
  */
 export async function listCoarenaModels(apiKey: string, proxy?: string | null): Promise<string[]> {
+  if (!apiKey.trim()) {
+    const ping = await pingCoarenaServer();
+    if (ping.ok && ping.models?.length) return ping.models;
+    return COARENA_FALLBACK_MODELS;
+  }
   try {
     const res = await doFetch(COARENA_MODEL_ENDPOINT, {
       method: "GET",
@@ -155,7 +214,7 @@ export async function listCoarenaModels(apiKey: string, proxy?: string | null): 
  */
 export async function sendCoarenaFeedback(payload: CoarenaFeedback, apiKey?: string, proxy?: string | null): Promise<boolean> {
   try {
-    const key = apiKey || "";
+    const key = await resolveCoarenaKey(apiKey);
     const res = await doFetch(COARENA_FEEDBACK_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },

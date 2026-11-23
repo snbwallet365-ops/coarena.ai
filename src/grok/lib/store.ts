@@ -112,7 +112,7 @@ export const KNOWLEDGE: Record<string, string> = {
 interface State {
   bots: Bot[]; threads: Record<string, Message[]>; docs: BrainDoc[]; routines: Routine[]; sessions: BrowserSession[]; flows: Flow[]; settings: Settings;
   addBot: (b: Partial<Bot>) => string; updateBot: (id: string, p: Partial<Bot>) => void; removeBot: (id: string) => void;
-  pushMsg: (botId: string, m: Message) => void; patchMsg: (botId: string, id: string, fn: (m: Message) => Message) => void; clearThread: (botId: string) => void;
+  pushMsg: (botId: string, m: Message) => void; removeMsg: (botId: string, id: string) => void; patchMsg: (botId: string, id: string, fn: (m: Message) => Message) => void; clearThread: (botId: string) => void;
   rateMessage: (botId: string, id: string, rating: 1 | -1) => void;
   addDoc: (d: Omit<BrainDoc, "id" | "createdAt">) => void; updateDoc: (id: string, p: Partial<BrainDoc>) => void; removeDoc: (id: string) => void;
   addRoutine: (r: Omit<Routine, "id">) => void; updateRoutine: (id: string, p: Partial<Routine>) => void; removeRoutine: (id: string) => void;
@@ -123,7 +123,7 @@ interface State {
 }
 
 const DEFAULT_SETTINGS: Settings = {
-  keys: { coarena: COARENA_API_KEY, xai: "", openai: "", deepseek: "", mistral: "", gemini: "" },
+  keys: { coarena: "", xai: "", openai: "", deepseek: "", mistral: "", gemini: "" },
   whatsapp: { phone: "", token: "", phoneNumberId: "", connected: false },
   server: { url: "http://localhost:8787", useProxy: false },
   approvals: true, notifications: false, maxSteps: 6, temperature: 0.7, userName: "You",
@@ -160,6 +160,7 @@ export const useStore = create<State>()(
       updateBot: (id, p) => set((s) => ({ bots: s.bots.map((b) => (b.id === id ? { ...b, ...p } : b)) })),
       removeBot: (id) => set((s) => { const t = { ...s.threads }; delete t[id]; return { bots: s.bots.filter((b) => b.id !== id), threads: t, routines: s.routines.filter((r) => r.botId !== id) }; }),
       pushMsg: (botId, m) => set((s) => ({ threads: { ...s.threads, [botId]: [...(s.threads[botId] ?? []), m] } })),
+      removeMsg: (botId, id) => set((s) => ({ threads: { ...s.threads, [botId]: (s.threads[botId] ?? []).filter((m) => m.id !== id) } })),
       patchMsg: (botId, id, fn) => set((s) => ({ threads: { ...s.threads, [botId]: (s.threads[botId] ?? []).map((m) => (m.id === id ? fn(m) : m)) } })),
       clearThread: (botId) => set((s) => ({ threads: { ...s.threads, [botId]: [] } })),
       rateMessage: (botId, id, rating) => set((s) => ({ threads: { ...s.threads, [botId]: (s.threads[botId] ?? []).map((m) => (m.id === id ? { ...m, rating } : m)) } })),
@@ -187,7 +188,7 @@ export const useStore = create<State>()(
         const p = persisted ?? {};
         const docs: BrainDoc[] = p.docs ?? current.docs;
         const keys = { ...DEFAULT_SETTINGS.keys, ...(p.settings?.keys ?? {}) };
-        if (keys.coarena === undefined) keys.coarena = COARENA_API_KEY;
+        if (keys.coarena === undefined) keys.coarena = "";
         return {
           ...current, ...p,
           flows: p.flows ?? current.flows,
@@ -214,7 +215,7 @@ export const useStore = create<State>()(
             if (Array.isArray(s.sessions)) s.sessions = s.sessions.map((x: any) => (x.botId === "grok" ? { ...x, botId: "coarena" } : x));
           }
           if (s.settings) {
-            s.settings.keys = { ...(s.settings.keys ?? {}), coarena: s.settings.keys?.coarena || COARENA_API_KEY };
+            s.settings.keys = { ...(s.settings.keys ?? {}), coarena: s.settings.keys?.coarena || "" };
             if (s.settings.feedback === undefined) s.settings.feedback = true;
           }
         }
@@ -234,19 +235,23 @@ interface Runtime {
   controllers: Record<string, AbortController>;
   browser: LiveBrowser | null; browserMin: boolean;
   approvals: Record<string, (ok: boolean) => void>;
+  /** Human Take Over: when set, the agent is paused and only the user drives the browser. */
+  takeover: { botId: string; since: number } | null;
   serverOnline: boolean;
   toast: string | null;
   drawer: boolean; rightOpen: boolean; rightTab: RightTab;
   flowRuns: Record<string, FlowRun>;
   /** Live model list fetched from Coarena /v1/models. */
   models: string[]; modelsLoading: boolean;
+  /** Last agent created — browser runners prefer it so a new agent is one tap away. */
+  preferredBot: string | null;
   set: (p: Partial<Runtime>) => void;
   showToast: (t: string) => void;
 }
 export const useRuntime = create<Runtime>()((set) => ({
   live: {}, controllers: {}, browser: null, browserMin: false, approvals: {}, serverOnline: false, toast: null,
   drawer: false, rightOpen: false, rightTab: "computer", flowRuns: {},
-  models: COARENA_FALLBACK_MODELS, modelsLoading: false,
+  models: COARENA_FALLBACK_MODELS, modelsLoading: false, takeover: null, preferredBot: null,
   set: (p) => set(p),
   showToast: (t) => { set({ toast: t }); setTimeout(() => set((s) => (s.toast === t ? { toast: null } : s)), 2600); },
 }));

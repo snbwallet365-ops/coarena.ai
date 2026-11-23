@@ -3,13 +3,27 @@ import { useEffect, useState } from "react";
 import { useStore, useRuntime, PROVIDERS, TOOL_INFO, type Bot, type Provider, type Shape, type ToolName } from "../lib/store";
 import { COARENA_DEFAULT_MODEL } from "../lib/coarena";
 import BotAvatar from "./BotAvatar";
+import { Globe } from "lucide-react";
 import { Sheet, Group, Row, Toggle, Field, inputCls } from "./ui";
 import { cn } from "../utils/cn";
 
 const SHAPES: Shape[] = ["circle", "squircle", "triangle", "hex", "diamond", "blob", "pill", "star"];
 const COLORS = ["#1c1c1e", "#007aff", "#34c759", "#ff9500", "#ff3b30", "#5856d6", "#af52de", "#ff2d55", "#00c7be", "#fa520f", "#4d6bfe", "#a2845e"];
 const KNOW = [["", "None"], ["grok", "Coarena agent harness"], ["visa", "Visa & refusals"], ["legal", "Legal drafting"], ["pdf", "PDF documents"], ["base44", "App builder (Base44)"], ["browser", "Browser-use"]] as const;
+const BROWSER_AGENT: Partial<Bot> = {
+  name: "Browser Pilot",
+  title: "Browser automation · live preview",
+  shape: "squircle",
+  color: "#007aff",
+  provider: "coarena",
+  model: COARENA_DEFAULT_MODEL,
+  knowledge: "browser",
+  system: "You are Browser Pilot, an autonomous browser operator. You drive the Computer & Browser panel: open pages, read them, click, fill forms and extract data step by step. Always say what you are about to do in one short sentence, then act. If a page fails to load, retry once, then fall back to a search. Summarise results as a clear list with URLs.",
+  tools: ["browse", "search", "click", "type", "remember"],
+};
+
 const TEMPLATES: Partial<Bot>[] = [
+  BROWSER_AGENT,
   { name: "Inbox Manager", title: "Email triage", shape: "squircle", color: "#00c7be", system: "You triage email, draft replies and summarise threads.", tools: ["search", "remember", "whatsapp"] },
   { name: "Visa Rejection Analyst", title: "Refusal → approval plan", shape: "star", color: "#ff9500", provider: "coarena", model: COARENA_DEFAULT_MODEL, knowledge: "visa", system: "You analyse visa refusal letters line by line and build approval-focused reapplication or appeal strategies.", tools: ["search", "browse", "pdf", "remember"] },
   { name: "Contract Reviewer", title: "Risk & clause review", shape: "hex", color: "#5856d6", knowledge: "legal", system: "You review contracts, flag risky clauses, and suggest redlines.", tools: ["pdf", "search"] },
@@ -17,13 +31,20 @@ const TEMPLATES: Partial<Bot>[] = [
   { name: "Mistral Agent", title: "Agents API", shape: "triangle", color: "#fa520f", provider: "mistral", model: "mistral-large-latest", system: "You are a Mistral agent.", tools: ["search", "browse"] },
 ];
 
-export default function BotEditor({ botId, open, onClose, onCreated }: { botId: string | null; open: boolean; onClose: () => void; onCreated?: (id: string) => void }) {
+export default function BotEditor({ botId, open, onClose, onCreated, preset }: {
+  botId: string | null; open: boolean; onClose: () => void;
+  onCreated?: (id: string) => void; preset?: Partial<Bot>;
+}) {
   const existing = useStore((s) => s.bots.find((b) => b.id === botId));
   const { addBot, updateBot, removeBot, clearThread } = useStore.getState();
   const [d, setD] = useState<Partial<Bot>>({});
 
   useEffect(() => {
-    if (open) setD(existing ? { ...existing } : { name: "", title: "", shape: "blob", color: "#007aff", provider: "coarena", model: COARENA_DEFAULT_MODEL, system: "You are a helpful AI teammate. Be concise and practical.", tools: ["search", "browse", "remember"], knowledge: "" });
+    if (open) setD(existing ? { ...existing } : {
+      name: "", title: "", shape: "blob", color: "#007aff", provider: "coarena", model: COARENA_DEFAULT_MODEL,
+      system: "You are a helpful AI teammate. Be concise and practical.", tools: ["search", "browse", "remember"], knowledge: "",
+      ...preset,
+    });
   }, [open, botId]);
 
   const up = (p: Partial<Bot>) => setD((x) => ({ ...x, ...p }));
@@ -31,7 +52,12 @@ export default function BotEditor({ botId, open, onClose, onCreated }: { botId: 
     if (!d.name?.trim()) return;
     const clean = { ...d, name: d.name.trim(), title: d.title?.trim() || "Teammate" };
     if (existing) updateBot(existing.id, clean);
-    else { const id = addBot(clean); onCreated?.(id); }
+    else {
+      const id = addBot(clean);
+      const canBrowse = (clean.tools ?? []).includes("browse");
+      useRuntime.getState().showToast(canBrowse ? `${clean.name} is ready in Computer & Browser` : `${clean.name} created`);
+      onCreated?.(id);
+    }
     onClose();
   };
   const tools = (d.tools ?? []) as ToolName[];
@@ -105,6 +131,12 @@ export default function BotEditor({ botId, open, onClose, onCreated }: { botId: 
         </Group>
 
         <Group header="Tools" footer="Click and type need the local Playwright server. Sensitive actions ask for approval.">
+          {tools.includes("browse") && (
+            <div className="flex items-center gap-2 border-b border-sep px-4 py-2.5 text-[12.5px] text-label2">
+              <Globe size={14} className="shrink-0 text-[#007aff]" />
+              <span>This agent appears in <b className="text-label">Computer &amp; Browser</b> with a live screen, step log and Take Over.</span>
+            </div>
+          )}
           {(Object.keys(TOOL_INFO) as ToolName[]).map((t) => (
             <Row key={t} title={TOOL_INFO[t].label} subtitle={TOOL_INFO[t].desc}
               right={<Toggle on={tools.includes(t)} onChange={(v) => up({ tools: v ? [...tools, t] : tools.filter((x) => x !== t) })} />} />
