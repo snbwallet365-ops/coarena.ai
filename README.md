@@ -44,6 +44,49 @@ bun run build        # production build
 bun run test         # vitest
 ```
 
+### Sandbox environment (Base44)
+
+The Base44 sandbox runs this repo from source in one Docker service. The Compose file,
+healthcheck and setup notes live in the **environment repository**, not in this repo — the
+steps below are what that configuration does, so you can replicate it locally.
+
+| Step | What happens |
+| --- | --- |
+| Runtime | `oven/bun:1` (matches the pinned `bun.lock`; `bunfig.toml` enforces a 24h release age) |
+| Source | repository bind-mounted at `/workspace`, so edits hot-reload |
+| Install | `bun install --frozen-lockfile` on container start; `node_modules` and the bun cache live in named volumes |
+| Dev server | `bun run dev -- --host 0.0.0.0 --port 3000 --strictPort` |
+| Entry point | host port `3000` |
+| Health check | `GET /` from inside the container via bun's `fetch` |
+
+Reproduce it with plain Bun when Docker is not available:
+
+```sh
+bun install --frozen-lockfile
+bun run dev -- --host 0.0.0.0 --port 3000
+```
+
+Environment variables come from `.env` (committed; Vite loads it in dev). Nothing else is
+required to boot:
+
+| Variable | Purpose |
+| --- | --- |
+| `COARENA_API_KEY` | server-only Coarena workspace key, resolved inside the server function (no `VITE_` prefix, never bundled) |
+| `VITE_COARENA_MODEL` | default model id shown in the composer |
+| `SUPABASE_URL` / `VITE_SUPABASE_URL` | Supabase project URL for optional auth sessions |
+| `SUPABASE_PUBLISHABLE_KEY` / `VITE_SUPABASE_PUBLISHABLE_KEY` | publishable key for the same project |
+
+To replace the Coarena key without editing `.env`, store it as a Base44 secret and add
+`/run/base44/app.env` as the last `env_file:` entry for the `web` service — secrets there
+override the committed defaults.
+
+`bun run test` includes `src/test/environment.test.ts`, which asserts these variables are
+present and resolve the same way the server reads them (presence and shape only — values are
+never printed).
+
+The optional Playwright computer (`server/index.mjs`, port `8787`) is not started by the
+sandbox; the Computer panel falls back to its cloud preview without it.
+
 ### Configure the Coarena key
 
 The workspace key lives in `.env` as **`COARENA_API_KEY`** (no `VITE_` prefix). It is read
