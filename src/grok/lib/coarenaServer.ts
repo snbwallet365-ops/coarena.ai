@@ -21,24 +21,51 @@ import { COARENA_MODEL_ENDPOINT } from "./coarena";
  *   2. the project `.env` file (dev server / simple deploys)
  *   3. legacy VITE_COARENA_API_KEY builds
  */
-async function readServerKey(): Promise<string> {
-  const env = (typeof process !== "undefined" && process.env) || {};
-  const fromEnv = String(env.COARENA_API_KEY || "").trim();
-  if (fromEnv) return fromEnv;
+/** Normalise a raw env value: drop a BOM, surrounding quotes and stray whitespace. */
+function cleanEnvValue(raw: unknown): string {
+  return String(raw ?? "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .trim();
+}
 
+/** Read one key from the project `.env`; returns "" when the file or key is missing. */
+async function readDotEnvKey(key: string): Promise<string> {
   try {
     const fs: any = await import("node:fs");
     const path: any = await import("node:path");
-    const file = path.join(process.cwd(), ".env");
-    const txt = fs.readFileSync(file, "utf8") as string;
-    const line = txt.split(/\r?\n/).find((l) => /^\s*COARENA_API_KEY\s*=/.test(l));
-    const val = line ? line.split("=").slice(1).join("=").trim().replace(/^["']|["']$/g, "") : "";
-    if (val) return val;
+    const txt = fs.readFileSync(path.join(process.cwd(), ".env"), "utf8") as string;
+    const pattern = new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=`);
+    const line = txt
+      .replace(/^\uFEFF/, "")
+      .split(/\r?\n/)
+      .find((l: string) => pattern.test(l));
+    return line ? cleanEnvValue(line.slice(line.indexOf("=") + 1)) : "";
   } catch {
-    /* no .env readable — fall through */
+    /* no .env readable — treat as unset */
   }
+  return "";
+}
 
-  return String(env.VITE_COARENA_API_KEY || import.meta.env["VITE_COARENA_API_KEY"] || "").trim();
+export async function readServerKey(): Promise<string> {
+  const env = (typeof process !== "undefined" && process.env) || {};
+
+  const fromEnv = cleanEnvValue(env.COARENA_API_KEY);
+  if (fromEnv) return fromEnv;
+
+  const fromFile = await readDotEnvKey("COARENA_API_KEY");
+  if (fromFile) return fromFile;
+
+  let fromBuild = "";
+  try {
+    fromBuild = cleanEnvValue(
+      env.VITE_COARENA_API_KEY || (import.meta as any)?.env?.["VITE_COARENA_API_KEY"],
+    );
+  } catch {
+    /* import.meta.env unavailable — no key */
+  }
+  return fromBuild;
 }
 
 /** Returns the workspace key without ever exposing it through the JS bundle. */
